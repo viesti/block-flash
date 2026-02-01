@@ -119,8 +119,11 @@ function startEditorLevel() {
 
 function editorClick(e) {
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
+  const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+  const offsetX = (rect.width - canvas.width * scale) / 2;
+  const offsetY = (rect.height - canvas.height * scale) / 2;
+  const mx = (e.clientX - rect.left - offsetX) / scale;
+  const my = (e.clientY - rect.top - offsetY) / scale;
   const worldX = snapToGrid(mx + editorCamera);
   const worldY = snapToGrid(my);
 
@@ -348,8 +351,10 @@ window.addEventListener("keyup", (e) => {
 });
 canvas.addEventListener("mousedown", (e) => {
   if (state === "editor") { editorClick(e); return; }
+  jumpPressed = true;
   onJump();
 });
+canvas.addEventListener("mouseup", () => { jumpPressed = false; });
 canvas.addEventListener("contextmenu", (e) => { if (state === "editor") e.preventDefault(); });
 canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jumpPressed = true; onJump(); });
 canvas.addEventListener("touchend", (e) => { e.preventDefault(); jumpPressed = false; });
@@ -421,7 +426,7 @@ function update(dt) {
           player.x + PLAYER_SIZE > other.x && player.x < other.x + other.w &&
           player.y + PLAYER_SIZE <= other.y + 4
         );
-        if (supported || (player.vy >= 0 && overlapBottom <= 8)) {
+        if (supported || (player.vy >= 0 && overlapBottom <= PLAYER_SIZE / 2)) {
           player.y = ob.y - PLAYER_SIZE;
           player.vy = 0;
           player.onGround = true;
