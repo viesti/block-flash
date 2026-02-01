@@ -351,7 +351,8 @@ canvas.addEventListener("mousedown", (e) => {
   onJump();
 });
 canvas.addEventListener("contextmenu", (e) => { if (state === "editor") e.preventDefault(); });
-canvas.addEventListener("touchstart", (e) => { e.preventDefault(); onJump(); });
+canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jumpPressed = true; onJump(); });
+canvas.addEventListener("touchend", (e) => { e.preventDefault(); jumpPressed = false; });
 
 // Collision
 function collidesWithSpike(px, py, ps, sx, sy, sw, sh) {
@@ -386,6 +387,7 @@ function update(dt) {
     player.y = GROUND_Y - PLAYER_SIZE;
     player.vy = 0;
     player.onGround = true;
+    if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
   }
 
   // Rotation (visual spin when airborne)
@@ -410,6 +412,7 @@ function update(dt) {
         player.y = ob.y - PLAYER_SIZE;
         player.vy = 0;
         player.onGround = true;
+        if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
       } else if (minOverlap === overlapLeft || minOverlap === overlapRight) {
         // Check if player is supported by an adjacent block at the same height
         const supported = obstacles.some(other =>
@@ -422,6 +425,7 @@ function update(dt) {
           player.y = ob.y - PLAYER_SIZE;
           player.vy = 0;
           player.onGround = true;
+          if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
         } else {
           die();
           return;
