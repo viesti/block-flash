@@ -37,17 +37,29 @@ let levelSelectCopyNext = false;
 
 // URL sharing
 function serializeLevel(name, obstacles) {
-  return name + "~" + obstacles.map(o =>
-    (o.type === "spike" ? "s" : "b") + "-" + o.x + "-" + o.y + "-" + o.w + "-" + o.h
-  ).join("~");
+  return name + "~" + obstacles.map(o => {
+    let code;
+    if (o.type === "spike") code = "s";
+    else if (o.w === 72 && o.h === 72) code = "B";
+    else if (o.w === 108 && o.h === 36) code = "w";
+    else code = "b";
+    return code + "-" + o.x + "-" + o.y;
+  }).join("~");
 }
 
 function deserializeLevel(str) {
+  const codes = {s: ["spike",36,36], b: ["block",36,36], B: ["block",72,72], w: ["block",108,36]};
   const parts = str.split("~");
   const name = parts[0];
   const obstacles = parts.slice(1).map(s => {
-    const [t, x, y, w, h] = s.split("-");
-    return {type: t === "s" ? "spike" : "block", x: +x, y: +y, w: +w, h: +h};
+    const f = s.split("-");
+    if (f.length === 5) {
+      const [t, x, y, w, h] = f;
+      return {type: t === "s" ? "spike" : "block", x: +x, y: +y, w: +w, h: +h};
+    }
+    const [t, x, y] = f;
+    const [type, w, h] = codes[t] || ["block",36,36];
+    return {type, x: +x, y: +y, w, h};
   });
   return {name, obstacles};
 }
