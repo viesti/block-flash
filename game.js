@@ -11,6 +11,15 @@ const GRAVITY = 2800;
 const JUMP_VEL = -750;
 const GAME_SPEED = 400;
 const LEVEL_LENGTH = 8000;
+const COIN_RADIUS = 11;
+const COIN_HOVER = 13;
+// Kept clear of the obstacle behind and the one ahead, so a coin lands where the
+// player runs rather than where it is mid-jump.
+const COIN_LAND_INSET = PLAYER_SIZE * 1.5;
+const COIN_TAKEOFF_INSET = PLAYER_SIZE * 2;
+// Granularity of the reachability search that vets coin positions.
+const SOLVE_DT = 1 / 120;
+const SOLVE_QUANT = 12;
 
 // Colors
 const BG_COLORS = ["#1a0a2e", "#16213e", "#0f3460", "#533483"];
@@ -19,12 +28,37 @@ const GROUND_COLOR = "#1a1a2e";
 const SPIKE_COLOR = "#ff2255";
 const BLOCK_COLOR = "#4444ff";
 const ACCENT = "#ff00ff";
+const COIN_COLOR = "#ffd633";
 
 // State
 let state = "start"; // start | playing | dead | win | editor | levelSelect
-let player, camera, obstacles, particles, score, deathTime;
+let player, camera, obstacles, coins, coinsCollected, particles, score, deathTime;
 let jumpPressed = false;
 let lastTime = 0;
+
+// Music (gameplay only, never on the menus)
+const music = new Audio("High-Voltage_Club.mp3");
+music.loop = true;
+music.volume = 0.5;
+let musicOn = false;
+
+// "Inside a level" covers the run itself plus the death and win screens, so the
+// track keeps going across retries.
+function inLevel() {
+  return state === "playing" || state === "dead" || state === "win";
+}
+
+function syncMusic() {
+  const shouldPlay = inLevel();
+  if (shouldPlay === musicOn) return;
+  musicOn = shouldPlay;
+  if (shouldPlay) {
+    music.currentTime = 0;
+    music.play().catch(() => {});
+  } else {
+    music.pause();
+  }
+}
 
 // Editor state
 let editorTool = "spike"; // "spike" | "block" | "eraser"
@@ -32,6 +66,7 @@ let editorCamera = 0;
 let editorObstacles = [];
 let editorLevelName = null;
 let savedLevels = loadLevels();
+let coinTotal = loadCoinTotal();
 let playingEditorLevel = false;
 let levelSelectCopyNext = false;
 
@@ -84,6 +119,16 @@ function checkURLLevel() {
   } catch { return false; }
 }
 
+function loadCoinTotal() {
+  const stored = parseInt(localStorage.getItem("gdash_coins"), 10);
+  return isNaN(stored) ? 0 : stored;
+}
+
+function bankCoin() {
+  coinTotal++;
+  localStorage.setItem("gdash_coins", coinTotal);
+}
+
 function loadLevels() {
   try { return JSON.parse(localStorage.getItem("gdash_levels") || "[]"); }
   catch { return []; }
@@ -112,6 +157,8 @@ function startEditorLevel() {
   player = { x: 100, y: GROUND_Y - PLAYER_SIZE, vy: 0, onGround: true, rotation: 0 };
   camera = 0;
   obstacles = editorObstacles.map(o => ({...o}));
+  coins = [];
+  coinsCollected = 0;
   particles = [];
   score = 0;
   state = "playing";
@@ -263,10 +310,179 @@ function buildLevel() {
   return obs;
 }
 
+function obstacleTop(ob) {
+  return ob.type === "spike" ? ob.y - ob.h : ob.y;
+}
+
+function obstacleBottom(ob) {
+  return ob.type === "spike" ? ob.y : ob.y + ob.h;
+}
+
+// Stretches of ground the player can run along, split by whatever rests on it.
+function groundRuns(obstacles) {
+  const blockers = obstacles
+    .filter(ob => obstacleBottom(ob) >= GROUND_Y - 1)
+    .sort((a, b) => a.x - b.x);
+  const runs = [];
+  let from = 0;
+  for (const ob of blockers) {
+    if (ob.x > from) runs.push({ from, to: ob.x });
+    if (ob.x + ob.w > from) from = ob.x + ob.w;
+  }
+  runs.push({ from, to: LEVEL_LENGTH });
+  return runs;
+}
+
+// Surfaces the player can come to rest on.
+function standSurfaces(obstacles) {
+  return [{ x: -Infinity, w: Infinity, top: GROUND_Y }].concat(
+    obstacles.filter(ob => ob.type === "block").map(ob => ({ x: ob.x, w: ob.w, top: ob.y })));
+}
+
+// Resolve one simulated frame the way update() does, so the search agrees with
+// the collisions the player will actually experience. Returns false on death.
+function resolveSim(p, obstacles) {
+  for (const ob of obstacles) {
+    if (ob.type === "spike") {
+      if (collidesWithSpike(p.x, p.y, PLAYER_SIZE, ob.x, ob.y, ob.w, ob.h)) return false;
+      continue;
+    }
+    if (!collidesAABB(p.x, p.y, PLAYER_SIZE, PLAYER_SIZE, ob.x, ob.y, ob.w, ob.h)) continue;
+    const bottom = (p.y + PLAYER_SIZE) - ob.y;
+    const top = (ob.y + ob.h) - p.y;
+    const left = (p.x + PLAYER_SIZE) - ob.x;
+    const right = (ob.x + ob.w) - p.x;
+    const least = Math.min(bottom, top, left, right);
+    if (least === bottom && p.vy >= 0) { p.y = ob.y - PLAYER_SIZE; p.vy = 0; p.onGround = true; continue; }
+    if (least === left || least === right) {
+      const propped = obstacles.some(other =>
+        other.type === "block" && other !== ob && other.y === ob.y &&
+        p.x + PLAYER_SIZE > other.x && p.x < other.x + other.w &&
+        p.y + PLAYER_SIZE <= other.y + 4);
+      if (propped || (p.vy >= 0 && bottom <= PLAYER_SIZE / 2)) {
+        p.y = ob.y - PLAYER_SIZE; p.vy = 0; p.onGround = true; continue;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+// Which candidates a surviving run can actually touch. Jumping or holding is the
+// only choice the player has, so every standing position the level allows can be
+// enumerated, and a candidate counts only if some path sweeps it before dying.
+function sweptCoins(obstacles, candidates) {
+  const surfaces = standSurfaces(obstacles);
+  const swept = new Set();
+  const supported = (x, top) => surfaces.some(s =>
+    Math.abs(s.top - top) < 0.001 && x + PLAYER_SIZE > s.x && x < s.x + s.w);
+
+  // Advance from a standing position until the player stands again, or dies.
+  function advance(fromX, top, jump) {
+    const p = { x: fromX, y: top - PLAYER_SIZE, vy: jump ? JUMP_VEL : 0, onGround: !jump };
+    for (let i = 0; i < 2000; i++) {
+      const prevBottom = p.y + PLAYER_SIZE;
+      p.x += GAME_SPEED * SOLVE_DT;
+      if (p.onGround && !supported(p.x, p.y + PLAYER_SIZE)) p.onGround = false;
+      if (!p.onGround) { p.vy += GRAVITY * SOLVE_DT; p.y += p.vy * SOLVE_DT; }
+      if (!p.onGround && p.vy >= 0) {
+        for (const s of surfaces) {
+          if (p.x + PLAYER_SIZE <= s.x || p.x >= s.x + s.w) continue;
+          if (prevBottom <= s.top + 0.001 && p.y + PLAYER_SIZE >= s.top) {
+            p.y = s.top - PLAYER_SIZE; p.vy = 0; p.onGround = true; break;
+          }
+        }
+      }
+      if (!resolveSim(p, obstacles)) return null;
+      if (p.y > canvas.height) return null;
+      // Counted only on a solid overlap, so a coin the search merely grazes at
+      // this step size is dropped rather than kept as a near miss.
+      const grip = COIN_RADIUS - 4;
+      for (const c of candidates) {
+        if (p.x + PLAYER_SIZE > c.x - grip && p.x < c.x + grip &&
+            p.y + PLAYER_SIZE > c.y - grip && p.y < c.y + grip) swept.add(c);
+      }
+      if (p.x > LEVEL_LENGTH) return null;
+      if (p.onGround && (jump || p.x - fromX >= SOLVE_QUANT)) return { x: p.x, top: p.y + PLAYER_SIZE };
+    }
+    return null;
+  }
+
+  const seen = new Set(["100:" + GROUND_Y]);
+  const pending = [{ x: 100, top: GROUND_Y }];
+  while (pending.length) {
+    const from = pending.pop();
+    for (const jump of [false, true]) {
+      const next = advance(from.x, from.top, jump);
+      if (!next) continue;
+      const key = Math.round(next.x / SOLVE_QUANT) + ":" + Math.round(next.top);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pending.push(next);
+    }
+  }
+  return swept;
+}
+
+// Coins are proposed over footing the player can stand on, kept off the ends of
+// each stretch and away from spikes, then vetted by sweptCoins so only the ones
+// a surviving run can actually touch survive.
+function placeCoins(obstacles) {
+  const placed = [];
+
+  function overSpike(x) {
+    return obstacles.some(ob => ob.type === "spike" &&
+      x + COIN_RADIUS > ob.x - PLAYER_SIZE && x - COIN_RADIUS < ob.x + ob.w + PLAYER_SIZE);
+  }
+
+  function standClear(x, surface) {
+    return !obstacles.some(ob => collidesAABB(
+      x - PLAYER_SIZE / 2, surface - PLAYER_SIZE, PLAYER_SIZE, PLAYER_SIZE,
+      ob.x, obstacleTop(ob), ob.w, obstacleBottom(ob) - obstacleTop(ob)));
+  }
+
+  function add(x, surface) {
+    if (overSpike(x) || !standClear(x, surface)) return;
+    placed.push({
+      x, y: surface - COIN_RADIUS - COIN_HOVER,
+      taken: false,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  for (const ob of obstacles) {
+    if (ob.type !== "block") continue;
+    const cells = Math.max(1, Math.round(ob.w / PLAYER_SIZE));
+    for (let i = 0; i < cells; i++) {
+      if (Math.random() > 0.6) continue;
+      const x = ob.x + PLAYER_SIZE * (i + 0.5);
+      // The player needs full footing under the coin, not an overhanging edge.
+      if (x - PLAYER_SIZE / 2 < ob.x || x + PLAYER_SIZE / 2 > ob.x + ob.w) continue;
+      add(x, ob.y);
+    }
+  }
+
+  for (const run of groundRuns(obstacles)) {
+    if (Math.random() < 0.35) continue;
+    const start = Math.max(run.from + COIN_LAND_INSET, 500) + COIN_RADIUS;
+    const end = Math.min(run.to - COIN_TAKEOFF_INSET, LEVEL_LENGTH - 200) - COIN_RADIUS;
+    const span = end - start;
+    if (span < 0) continue;
+    const count = Math.min(3, Math.floor(span / PLAYER_SIZE) + 1);
+    const first = start + (span - (count - 1) * PLAYER_SIZE) / 2;
+    for (let i = 0; i < count; i++) add(first + i * PLAYER_SIZE, GROUND_Y);
+  }
+
+  const swept = sweptCoins(obstacles, placed);
+  return placed.filter(coin => swept.has(coin));
+}
+
 function reset(customObstacles) {
   player = { x: 100, y: GROUND_Y - PLAYER_SIZE, vy: 0, onGround: true, rotation: 0 };
   camera = 0;
   obstacles = customObstacles ? customObstacles.map(o => ({...o})) : buildLevel();
+  coins = customObstacles ? [] : placeCoins(obstacles);
+  coinsCollected = 0;
   particles = [];
   score = 0;
 }
@@ -284,8 +500,23 @@ function spawnParticles(x, y) {
   }
 }
 
+function spawnCoinSparkle(x, y) {
+  for (let i = 0; i < 10; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 260,
+      vy: -Math.random() * 260,
+      life: 1,
+      color: [COIN_COLOR, "#fff8b0"][Math.floor(Math.random() * 2)],
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
 // Input
 function onJump() {
+  // Autoplay may have been blocked (e.g. a level opened straight from a URL).
+  if (musicOn && music.paused) music.play().catch(() => {});
   if (state === "editor" || state === "levelSelect") return;
   if (state === "start") { state = "playing"; playingEditorLevel = false; reset(); return; }
   if (state === "dead" && performance.now() - deathTime > 500) {
@@ -372,12 +603,10 @@ function collidesAABB(ax, ay, aw, ah, bx, by, bw, bh) {
 
 // Update
 function update(dt) {
-  if (state !== "playing") {
-    // Update particles even when dead
-    particles.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt * 1.5; });
-    particles = particles.filter((p) => p.life > 0);
-    return;
-  }
+  particles.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt * 1.5; });
+  particles = particles.filter((p) => p.life > 0);
+
+  if (state !== "playing") return;
 
   // Move player forward
   player.x += GAME_SPEED * dt;
@@ -452,6 +681,17 @@ function update(dt) {
     }
   }
 
+  // Coin pickup
+  for (const coin of coins) {
+    if (coin.taken) continue;
+    if (!collidesAABB(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE,
+                      coin.x - COIN_RADIUS, coin.y - COIN_RADIUS, COIN_RADIUS * 2, COIN_RADIUS * 2)) continue;
+    coin.taken = true;
+    coinsCollected++;
+    bankCoin();
+    spawnCoinSparkle(coin.x, coin.y);
+  }
+
   // Fall off screen
   if (player.y > canvas.height + 100) { die(); return; }
 
@@ -470,7 +710,7 @@ function update(dt) {
 }
 
 function die() {
-  spawnParticles(player.x - camera + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2);
+  spawnParticles(player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2);
   state = "dead";
   deathTime = performance.now();
 }
@@ -535,6 +775,29 @@ function draw() {
     }
   }
 
+  // Coins
+  const bobTime = performance.now() / 1000;
+  for (const coin of coins) {
+    if (coin.taken) continue;
+    const sx = coin.x - cx;
+    if (sx > canvas.width + 50 || sx < -50) continue;
+    const sy = coin.y + Math.sin(bobTime * 3 + coin.phase) * 4;
+    ctx.fillStyle = COIN_COLOR;
+    ctx.shadowColor = COIN_COLOR;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(sx, sy, COIN_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#b8860b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.ellipse(sx - COIN_RADIUS * 0.25, sy - COIN_RADIUS * 0.3, COIN_RADIUS * 0.22, COIN_RADIUS * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // Player
   if (state === "playing") {
     ctx.save();
@@ -557,7 +820,7 @@ function draw() {
   for (const p of particles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    ctx.fillRect(p.x - cx - p.size / 2, p.y - p.size / 2, p.size, p.size);
   }
   ctx.globalAlpha = 1;
 
@@ -569,6 +832,19 @@ function draw() {
   ctx.fillStyle = "#fff";
   ctx.font = "14px monospace";
   ctx.fillText(score + "%", 230, 24);
+
+  // Coin counter, omitted in levels that have no coins
+  if (coins.length) {
+    ctx.fillStyle = COIN_COLOR;
+    ctx.beginPath();
+    ctx.arc(300, 19, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#b8860b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.fillText("x " + coinsCollected, 314, 24);
+  }
 
   // Death screen
   if (state === "dead") {
@@ -607,7 +883,7 @@ function drawStartScreen() {
   ctx.textAlign = "center";
   ctx.shadowColor = ACCENT;
   ctx.shadowBlur = 20;
-  ctx.fillText("GEOMETRY DASH", canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText("BLOCK FLASH", canvas.width / 2, canvas.height / 2 - 40);
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = "#fff";
@@ -617,6 +893,8 @@ function drawStartScreen() {
   ctx.font = "14px monospace";
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.fillText("E = Level Editor  |  L = Saved Levels", canvas.width / 2, canvas.height / 2 + 50);
+
+
 
   // Animated player icon
   const t = performance.now() / 1000;
@@ -630,13 +908,30 @@ function drawStartScreen() {
   ctx.fillRect(-18, -18, 36, 36);
   ctx.shadowBlur = 0;
   ctx.restore();
+
+  // Coins collected across every run so far
+  const totalText = "x " + coinTotal + " collected";
+  ctx.font = "16px monospace";
+  const textWidth = ctx.measureText(totalText).width;
+  const coinX = canvas.width / 2 - textWidth / 2 - 14;
+  const rowY = canvas.height - 30;
+  ctx.fillStyle = COIN_COLOR;
+  ctx.beginPath();
+  ctx.arc(coinX, rowY - 5, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#b8860b";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
   ctx.textAlign = "left";
+  ctx.fillText(totalText, coinX + 14, rowY);
 }
 
 // Game loop
 function loop(time) {
   const dt = Math.min((time - lastTime) / 1000, 0.05);
   lastTime = time;
+  syncMusic();
   update(dt);
   draw();
   requestAnimationFrame(loop);
