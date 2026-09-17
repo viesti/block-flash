@@ -31,16 +31,23 @@ const ACCENT = "#ff00ff";
 const COIN_COLOR = "#ffd633";
 
 // State
-let state = "start"; // start | playing | dead | win | editor | levelSelect
+let state = "splash"; // splash | start | playing | dead | win | editor | levelSelect | shop
 let player, camera, obstacles, coins, coinsCollected, particles, score, deathTime;
 let jumpPressed = false;
 let lastTime = 0;
 
-// Music (gameplay only, never on the menus)
-const music = new Audio("High-Voltage_Club.mp3");
-music.loop = true;
-music.volume = 0.5;
-let musicOn = false;
+// Music: one track for a level run, another for every menu screen
+const levelMusic = new Audio("High-Voltage_Club.mp3");
+const menuMusic = new Audio("Relaxing_Techno.mp3");
+for (const track of [levelMusic, menuMusic]) {
+  track.loop = true;
+  track.volume = 0.5;
+}
+let currentTrack = null;
+
+function playTrack(track) {
+  track.play().catch(() => {});
+}
 
 // "Inside a level" covers the run itself plus the death and win screens, so the
 // track keeps going across retries.
@@ -49,15 +56,18 @@ function inLevel() {
 }
 
 function syncMusic() {
-  const shouldPlay = inLevel();
-  if (shouldPlay === musicOn) return;
-  musicOn = shouldPlay;
-  if (shouldPlay) {
-    music.currentTime = 0;
-    music.play().catch(() => {});
-  } else {
-    music.pause();
-  }
+  const wanted = inLevel() ? levelMusic : menuMusic;
+  if (wanted === currentTrack) return;
+  if (currentTrack) currentTrack.pause();
+  currentTrack = wanted;
+  wanted.currentTime = 0;
+  playTrack(wanted);
+}
+
+// Autoplay is blocked until the page has seen a gesture, so the first input of
+// the session starts whichever track is already selected.
+function resumeMusic() {
+  if (currentTrack && currentTrack.paused) playTrack(currentTrack);
 }
 
 // Editor state
@@ -124,9 +134,91 @@ function loadCoinTotal() {
   return isNaN(stored) ? 0 : stored;
 }
 
+function saveCoins() {
+  localStorage.setItem("gdash_coins", coinTotal);
+}
+
 function bankCoin() {
   coinTotal++;
-  localStorage.setItem("gdash_coins", coinTotal);
+  saveCoins();
+}
+
+// Shop catalogue. The zero-price entries are owned from the start so the player
+// can always switch back to the plain green cube.
+const SHOP_ITEMS = [
+  {id: "c_green",   kind: "color", name: "GREEN",   price: 0,  value: PLAYER_COLOR},
+  {id: "c_cyan",    kind: "color", name: "CYAN",    price: 500,  value: "#00d4ff"},
+  {id: "c_pink",    kind: "color", name: "PINK",    price: 1000, value: "#ff2e88"},
+  {id: "c_gold",    kind: "color", name: "GOLD",    price: 1500, value: "#ffc93c"},
+  {id: "s_square",  kind: "shape", name: "CLASSIC", price: 0,  value: "square"},
+  {id: "s_round",   kind: "shape", name: "ROUNDED", price: 2000, value: "rounded"},
+  {id: "s_diamond", kind: "shape", name: "DIAMOND", price: 3000, value: "diamond"},
+  {id: "s_ring",    kind: "shape", name: "RING",    price: 4000, value: "ring"},
+];
+const FREE_ITEMS = SHOP_ITEMS.filter(it => it.price === 0).map(it => it.id);
+
+function itemById(id) {
+  return SHOP_ITEMS.find(it => it.id === id);
+}
+
+function loadOwned() {
+  let stored = [];
+  try { stored = JSON.parse(localStorage.getItem("gdash_owned") || "[]"); }
+  catch { stored = []; }
+  const ids = Array.isArray(stored) ? stored.filter(id => itemById(id)) : [];
+  return [...new Set([...FREE_ITEMS, ...ids])];
+}
+
+function saveOwned() {
+  localStorage.setItem("gdash_owned", JSON.stringify(owned));
+}
+
+function loadEquipped() {
+  const fallback = {color: "c_green", shape: "s_square"};
+  let stored;
+  try { stored = JSON.parse(localStorage.getItem("gdash_equip") || "null"); }
+  catch { stored = null; }
+  if (!stored) return fallback;
+  const out = {...fallback};
+  for (const kind of ["color", "shape"]) {
+    const item = itemById(stored[kind]);
+    if (item && item.kind === kind) out[kind] = item.id;
+  }
+  return out;
+}
+
+function saveEquipped() {
+  localStorage.setItem("gdash_equip", JSON.stringify(equipped));
+}
+
+function equippedColor() {
+  return itemById(equipped.color).value;
+}
+
+function equippedShape() {
+  return itemById(equipped.shape).value;
+}
+
+// True while some cube the player does not own is within reach of the purse.
+function shopHasAffordable() {
+  return SHOP_ITEMS.some(it => !owned.includes(it.id) && coinTotal >= it.price);
+}
+
+let owned = loadOwned();
+let equipped = loadEquipped();
+
+function shopSelect(i) {
+  const item = SHOP_ITEMS[i];
+  if (!item) return;
+  if (!owned.includes(item.id)) {
+    if (coinTotal < item.price) return;
+    coinTotal -= item.price;
+    saveCoins();
+    owned.push(item.id);
+    saveOwned();
+  }
+  equipped[item.kind] = item.id;
+  saveEquipped();
 }
 
 function loadLevels() {
@@ -164,13 +256,21 @@ function startEditorLevel() {
   state = "playing";
 }
 
-function editorClick(e) {
+// Maps a viewport point to canvas coordinates, undoing the letterboxed scaling.
+function canvasPos(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
   const offsetX = (rect.width - canvas.width * scale) / 2;
   const offsetY = (rect.height - canvas.height * scale) / 2;
-  const mx = (e.clientX - rect.left - offsetX) / scale;
-  const my = (e.clientY - rect.top - offsetY) / scale;
+  return {x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale};
+}
+
+function inRect(p, r) {
+  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+}
+
+function editorClick(e) {
+  const {x: mx, y: my} = canvasPos(e.clientX, e.clientY);
   const worldX = snapToGrid(mx + editorCamera);
   const worldY = snapToGrid(my);
 
@@ -195,6 +295,199 @@ function editorClick(e) {
     const py = worldY < GROUND_Y ? worldY : GROUND_Y - PLAYER_SIZE;
     editorObstacles.push({ type: "block", x: worldX, y: py, w: PLAYER_SIZE, h: PLAYER_SIZE });
   }
+}
+
+// Draws a cube centred on the current transform origin. The caller owns any
+// rotation, so the run's spin and the shop's static preview share one path.
+function drawCube(size, color, shape) {
+  const h = size / 2;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = size * 0.42;
+  if (shape === "rounded") {
+    ctx.beginPath();
+    ctx.roundRect(-h, -h, size, size, size * 0.3);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.beginPath();
+    ctx.roundRect(-size / 4, -size / 4, size / 2, size / 2, size * 0.15);
+    ctx.fill();
+  } else if (shape === "diamond") {
+    ctx.rotate(Math.PI / 4);
+    const d = size * 0.76;
+    ctx.fillRect(-d / 2, -d / 2, d, d);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.fillRect(-d / 4, -d / 4, d / 2, d / 2);
+    ctx.rotate(-Math.PI / 4);
+  } else if (shape === "ring") {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = size * 0.2;
+    ctx.strokeRect(-h + size * 0.1, -h + size * 0.1, size * 0.8, size * 0.8);
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.17, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.fillRect(-h, -h, size, size);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.fillRect(-size / 4, -size / 4, size / 2, size / 2);
+  }
+  ctx.shadowBlur = 0;
+}
+
+// Shop layout
+const SHOP_COLS = 4;
+const SHOP_TILE_W = 160;
+const SHOP_TILE_H = 132;
+const SHOP_GAP = 20;
+const SHOP_X0 = (800 - (SHOP_COLS * SHOP_TILE_W + (SHOP_COLS - 1) * SHOP_GAP)) / 2;
+const SHOP_Y0 = 92;
+const SHOP_BACK_BTN = {x: 40, y: 400, w: 110, h: 34};
+const START_SHOP_BTN = {x: 640, y: 18, w: 140, h: 36};
+// Sits clear of the progress bar and coin counter, which hug the top left.
+const HOME_BTN = {x: 690, y: 12, w: 96, h: 30};
+
+// Draws a rounded menu button. A truthy `pulse` makes the outline breathe.
+function drawButton(r, label, opts = {}) {
+  ctx.fillStyle = opts.fill || "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.w, r.h, 8);
+  ctx.fill();
+  ctx.globalAlpha = opts.pulse ? 0.55 + 0.45 * Math.sin(performance.now() / 220) : 1;
+  ctx.strokeStyle = opts.stroke || "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 15px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 5);
+  ctx.textAlign = "left";
+}
+
+// Leaves a run for the main menu. The next start press builds a fresh level.
+function goHome() {
+  state = "start";
+  playingEditorLevel = false;
+}
+
+function shopTileRect(i) {
+  const col = i % SHOP_COLS;
+  const row = Math.floor(i / SHOP_COLS);
+  return {
+    x: SHOP_X0 + col * (SHOP_TILE_W + SHOP_GAP),
+    y: SHOP_Y0 + row * (SHOP_TILE_H + SHOP_GAP),
+    w: SHOP_TILE_W,
+    h: SHOP_TILE_H,
+  };
+}
+
+function drawCoinIcon(x, y, r) {
+  ctx.fillStyle = COIN_COLOR;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#b8860b";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawShop() {
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 220);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = ACCENT;
+  ctx.font = "bold 32px monospace";
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 16;
+  ctx.fillText("SHOP", canvas.width / 2, 52);
+  ctx.shadowBlur = 0;
+
+  // Purse
+  ctx.font = "18px monospace";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#fff";
+  ctx.fillText(String(coinTotal), canvas.width - 40, 46);
+  drawCoinIcon(canvas.width - 40 - ctx.measureText(String(coinTotal)).width - 16, 40, 9);
+
+  for (let i = 0; i < SHOP_ITEMS.length; i++) {
+    const item = SHOP_ITEMS[i];
+    const r = shopTileRect(i);
+    const isOwned = owned.includes(item.id);
+    const isEquipped = equipped[item.kind] === item.id;
+    const canBuy = !isOwned && coinTotal >= item.price;
+
+    ctx.fillStyle = isEquipped ? "rgba(255,0,255,0.10)"
+      : canBuy ? "rgba(0,255,136,0.10)"
+      : "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.roundRect(r.x, r.y, r.w, r.h, 10);
+    ctx.fill();
+
+    if (isEquipped) {
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 3;
+    } else if (canBuy) {
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = PLAYER_COLOR;
+      ctx.lineWidth = 2;
+    } else {
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 2;
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Index, so the tiles can also be picked from the keyboard
+    ctx.textAlign = "left";
+    ctx.font = "12px monospace";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillText(String(i + 1), r.x + 10, r.y + 20);
+
+    // Owned cubes read as spent: dimmed unless they are the ones in play
+    ctx.globalAlpha = isOwned && !isEquipped ? 0.4 : 1;
+    const color = item.kind === "color" ? item.value : equippedColor();
+    const shape = item.kind === "shape" ? item.value : equippedShape();
+    ctx.save();
+    ctx.translate(r.x + r.w / 2, r.y + 48);
+    drawCube(44, color, shape);
+    ctx.restore();
+
+    ctx.textAlign = "center";
+    ctx.font = "bold 15px monospace";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(item.name, r.x + r.w / 2, r.y + 92);
+    ctx.globalAlpha = 1;
+
+    ctx.font = "13px monospace";
+    if (isEquipped) {
+      ctx.fillStyle = ACCENT;
+      ctx.fillText("EQUIPPED", r.x + r.w / 2, r.y + 114);
+    } else if (isOwned) {
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillText("OWNED - TAP TO WEAR", r.x + r.w / 2, r.y + 114);
+    } else {
+      const price = String(item.price);
+      const priceW = ctx.measureText(price).width;
+      ctx.globalAlpha = canBuy ? 1 : 0.45;
+      drawCoinIcon(r.x + r.w / 2 - priceW / 2 - 12, r.y + 110, 7);
+      ctx.fillStyle = canBuy ? COIN_COLOR : "rgba(255,255,255,0.5)";
+      ctx.textAlign = "left";
+      ctx.fillText(price, r.x + r.w / 2 - priceW / 2 + 2, r.y + 114);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  drawButton(SHOP_BACK_BTN, "BACK");
+
+  ctx.textAlign = "center";
+  ctx.font = "14px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillText("Tap an item to buy or wear it  |  1-8 = select  |  Esc = back", canvas.width / 2 + 50, 422);
+  ctx.textAlign = "left";
 }
 
 function drawEditor() {
@@ -494,7 +787,7 @@ function spawnParticles(x, y) {
       vx: (Math.random() - 0.5) * 600,
       vy: (Math.random() - 0.5) * 600,
       life: 1,
-      color: [PLAYER_COLOR, ACCENT, "#ffff00", "#ff4444"][Math.floor(Math.random() * 4)],
+      color: [equippedColor(), ACCENT, "#ffff00", "#ff4444"][Math.floor(Math.random() * 4)],
       size: 3 + Math.random() * 5,
     });
   }
@@ -515,10 +808,10 @@ function spawnCoinSparkle(x, y) {
 
 // Input
 function onJump() {
-  // Autoplay may have been blocked (e.g. a level opened straight from a URL).
-  if (musicOn && music.paused) music.play().catch(() => {});
-  if (state === "editor" || state === "levelSelect") return;
-  if (state === "start") { state = "playing"; playingEditorLevel = false; reset(); return; }
+  if (state === "editor" || state === "levelSelect" || state === "shop") return;
+  if (state === "start") {
+    state = "playing"; playingEditorLevel = false; reset(); return;
+  }
   if (state === "dead" && performance.now() - deathTime > 500) {
     if (playingEditorLevel) { reset(editorObstacles); } else { reset(); }
     state = "playing"; return;
@@ -534,6 +827,7 @@ function onJump() {
 }
 
 window.addEventListener("keydown", (e) => {
+  if (state === "splash") { e.preventDefault(); state = "start"; return; }
   if (e.code === "Space" || e.code === "ArrowUp") {
     e.preventDefault();
     if (!jumpPressed) { jumpPressed = true; onJump(); }
@@ -546,8 +840,16 @@ window.addEventListener("keydown", (e) => {
     if ((state === "playing" || state === "dead" || state === "win") && playingEditorLevel) { state = "editor"; return; }
   }
   if (e.code === "KeyL" && state === "start") { state = "levelSelect"; return; }
+  if (e.code === "KeyS" && state === "start") { state = "shop"; return; }
+  if (e.code === "KeyH" && inLevel()) { goHome(); return; }
   if (e.code === "Escape") {
-    if (state === "editor" || state === "levelSelect") { state = "start"; return; }
+    if (state === "editor" || state === "levelSelect" || state === "shop") { state = "start"; return; }
+    if (inLevel()) { goHome(); return; }
+  }
+  if (state === "shop") {
+    const num = parseInt(e.key);
+    if (!isNaN(num) && num >= 1 && num <= SHOP_ITEMS.length) shopSelect(num - 1);
+    return;
   }
   if (state === "editor") {
     if (e.code === "Digit1") editorTool = "spike";
@@ -580,14 +882,47 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => {
   if (e.code === "Space" || e.code === "ArrowUp") jumpPressed = false;
 });
+// Handles a tap on the menu screens. Returns true once it has been consumed.
+function menuPointer(clientX, clientY) {
+  if (state === "start") {
+    if (inRect(canvasPos(clientX, clientY), START_SHOP_BTN)) { state = "shop"; return true; }
+    return false;
+  }
+  if (inLevel()) {
+    if (inRect(canvasPos(clientX, clientY), HOME_BTN)) { goHome(); return true; }
+    return false;
+  }
+  if (state === "shop") {
+    const p = canvasPos(clientX, clientY);
+    if (inRect(p, SHOP_BACK_BTN)) { state = "start"; return true; }
+    for (let i = 0; i < SHOP_ITEMS.length; i++) {
+      if (inRect(p, shopTileRect(i))) { shopSelect(i); break; }
+    }
+    return true;
+  }
+  return false;
+}
+
+window.addEventListener("keydown", resumeMusic);
+window.addEventListener("pointerdown", resumeMusic);
+
 canvas.addEventListener("mousedown", (e) => {
+  if (state === "splash") { state = "start"; return; }
   if (state === "editor") { editorClick(e); return; }
+  if (menuPointer(e.clientX, e.clientY)) return;
   jumpPressed = true;
   onJump();
 });
 canvas.addEventListener("mouseup", () => { jumpPressed = false; });
 canvas.addEventListener("contextmenu", (e) => { if (state === "editor") e.preventDefault(); });
-canvas.addEventListener("touchstart", (e) => { e.preventDefault(); jumpPressed = true; onJump(); });
+canvas.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  if (state === "splash") { state = "start"; return; }
+  const t = e.changedTouches[0];
+  if (t && menuPointer(t.clientX, t.clientY)) return;
+  jumpPressed = true;
+  onJump();
+});
 canvas.addEventListener("touchend", (e) => { e.preventDefault(); jumpPressed = false; });
 
 // Collision
@@ -728,7 +1063,7 @@ function draw() {
   ctx.strokeStyle = "rgba(255,255,255,0.04)";
   ctx.lineWidth = 1;
   const gridSize = 60;
-  const parallax = state === "playing" || state === "dead" || state === "win" ? camera * 0.3 : 0;
+  const parallax = inLevel() ? camera * 0.3 : 0;
   for (let x = -parallax % gridSize; x < canvas.width; x += gridSize) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
@@ -736,9 +1071,11 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
+  if (state === "splash") { drawSplash(); return; }
   if (state === "start") { drawStartScreen(); return; }
   if (state === "editor") { drawEditor(); return; }
   if (state === "levelSelect") { drawLevelSelect(); return; }
+  if (state === "shop") { drawShop(); return; }
 
   const cx = camera;
 
@@ -805,14 +1142,7 @@ function draw() {
     const py = player.y + PLAYER_SIZE / 2;
     ctx.translate(px, py);
     ctx.rotate(player.rotation);
-    ctx.fillStyle = PLAYER_COLOR;
-    ctx.shadowColor = PLAYER_COLOR;
-    ctx.shadowBlur = 15;
-    ctx.fillRect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
-    ctx.shadowBlur = 0;
-    // Inner detail
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.fillRect(-PLAYER_SIZE / 4, -PLAYER_SIZE / 4, PLAYER_SIZE / 2, PLAYER_SIZE / 2);
+    drawCube(PLAYER_SIZE, equippedColor(), equippedShape());
     ctx.restore();
   }
 
@@ -875,6 +1205,23 @@ function draw() {
     if (playingEditorLevel) { ctx.fillText("E = back to editor", canvas.width / 2, canvas.height / 2 + 50); }
     ctx.textAlign = "left";
   }
+
+  drawButton(HOME_BTN, "HOME");
+}
+
+function drawSplash() {
+  ctx.textAlign = "center";
+  ctx.fillStyle = ACCENT;
+  ctx.font = "bold 64px monospace";
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 30;
+  ctx.fillText("BLOCK FLASH", canvas.width / 2, canvas.height / 2 - 10);
+  ctx.shadowBlur = 0;
+
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 400);
+  ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+  ctx.font = "20px monospace";
+  ctx.fillText("press a button to play", canvas.width / 2, canvas.height / 2 + 40);
 }
 
 function drawStartScreen() {
@@ -892,21 +1239,22 @@ function drawStartScreen() {
 
   ctx.font = "14px monospace";
   ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.fillText("E = Level Editor  |  L = Saved Levels", canvas.width / 2, canvas.height / 2 + 50);
+  ctx.fillText("E = Level Editor  |  L = Saved Levels  |  S = Shop", canvas.width / 2, canvas.height / 2 + 50);
 
+  // Shop button
+  const canBuy = shopHasAffordable();
+  drawButton(START_SHOP_BTN, "SHOP", canBuy
+    ? {stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.12)", pulse: true}
+    : {});
+  ctx.textAlign = "center";
 
-
-  // Animated player icon
+  // Animated player icon, wearing whatever is equipped
   const t = performance.now() / 1000;
   const by = Math.sin(t * 3) * 10;
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2 + 80 + by);
   ctx.rotate(t * 2);
-  ctx.fillStyle = PLAYER_COLOR;
-  ctx.shadowColor = PLAYER_COLOR;
-  ctx.shadowBlur = 15;
-  ctx.fillRect(-18, -18, 36, 36);
-  ctx.shadowBlur = 0;
+  drawCube(36, equippedColor(), equippedShape());
   ctx.restore();
 
   // Coins collected across every run so far
