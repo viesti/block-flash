@@ -22,9 +22,9 @@ const SOLVE_DT = 1 / 120;
 const SOLVE_QUANT = 12;
 
 // Colors
-const BG_COLORS = ["#1a0a2e", "#16213e", "#0f3460", "#533483"];
+const BG_COLORS = ["#0f0722", "#1a1036", "#0f3460", "#533483"];
 const PLAYER_COLOR = "#00ff88";
-const GROUND_COLOR = "#1a1a2e";
+const GROUND_COLOR = "#0c071a";
 const SPIKE_COLOR = "#ff2255";
 const BLOCK_COLOR = "#4444ff";
 const ACCENT = "#ff00ff";
@@ -45,6 +45,14 @@ let winRayAngle = 0;
 let winConfetti = [];
 let winFireworks = [];
 let winNextFirework = 0;
+
+// City skyline, player trail & atmosphere
+const CITY_STRIP_W = 2400;
+let farCityBuildings = [];
+let nearCityBuildings = [];
+let playerTrail = [];
+let jumpRings = [];
+let ambientSpecks = [];
 
 function getLevelEnd(obs = obstacles) {
   return playingEditorLevel || state === "editor"
@@ -614,11 +622,33 @@ function drawShop() {
 function drawEditor() {
   const cx = editorCamera;
 
-  // Ground
+  // 2-layer city skyline in editor background
+  drawAmbientSpecks();
+  drawCityLayer(farCityBuildings, CITY_STRIP_W, 0.10, "#130b28", "rgba(255,255,255,0.025)", cx);
+  drawCityLayer(nearCityBuildings, CITY_STRIP_W, 0.25, "#17173b", "rgba(255,255,255,0.045)", cx);
+
+  // Ground with glowing pink line
+  ctx.save();
   ctx.fillStyle = GROUND_COLOR;
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
-  ctx.fillStyle = ACCENT;
-  ctx.fillRect(0, GROUND_Y, canvas.width, 2);
+  ctx.strokeStyle = "rgba(255,255,255,0.04)";
+  ctx.lineWidth = 1;
+  const editorStripeOffset = -((cx * 0.5) % 36);
+  ctx.beginPath();
+  for (let x = editorStripeOffset - 36; x < canvas.width + 50; x += 36) {
+    ctx.moveTo(x, GROUND_Y);
+    ctx.lineTo(x - 30, canvas.height);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = "#ff00d4";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "#ff00d4";
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(canvas.width, GROUND_Y);
+  ctx.stroke();
+  ctx.restore();
 
   // Grid
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
@@ -962,6 +992,8 @@ function reset(customObstacles) {
   coins = customObstacles ? [] : placeCoins(obstacles);
   coinsCollected = 0;
   particles = [];
+  playerTrail = [];
+  jumpRings = [];
   score = 0;
   goalCrossed = false;
   winDelay = 0;
@@ -1401,8 +1433,7 @@ function onJump() {
     state = "playing"; return;
   }
   if (state === "playing" && player.onGround) {
-    player.vy = JUMP_VEL;
-    player.onGround = false;
+    triggerPlayerJump();
   }
 }
 
@@ -1612,6 +1643,9 @@ function update(dt) {
   particles.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt * 1.5; });
   particles = particles.filter((p) => p.life > 0);
 
+  updateAmbientSpecks(dt);
+  updateJumpRings(dt);
+
   goalRipples.forEach(r => { r.r += 260 * dt; r.life -= dt * 1.8; });
   goalRipples = goalRipples.filter(r => r.life > 0);
   if (goalFlash > 0) goalFlash = Math.max(0, goalFlash - dt * 2.5);
@@ -1621,7 +1655,20 @@ function update(dt) {
     return;
   }
 
-  if (state !== "playing") return;
+  if (state !== "playing") {
+    playerTrail = [];
+    return;
+  }
+
+  // Player motion trail (vana)
+  playerTrail.unshift({
+    x: player.x,
+    y: player.y,
+    rotation: player.rotation,
+    color: equippedColor(),
+    shape: equippedShape(),
+  });
+  if (playerTrail.length > 9) playerTrail.length = 9;
 
   // Move player forward
   player.x += GAME_SPEED * dt;
@@ -1636,7 +1683,7 @@ function update(dt) {
     player.y = GROUND_Y - PLAYER_SIZE;
     player.vy = 0;
     player.onGround = true;
-    if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
+    if (jumpPressed) { triggerPlayerJump(); }
   }
 
   // Rotation (visual spin when airborne)
@@ -1671,7 +1718,7 @@ function update(dt) {
         player.y = ob.y - PLAYER_SIZE;
         player.vy = 0;
         player.onGround = true;
-        if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
+        if (jumpPressed) { triggerPlayerJump(); }
       } else if (minOverlap === overlapLeft || minOverlap === overlapRight) {
         // Check if player is supported by an adjacent block at the same height
         const supported = obstacles.some(other =>
@@ -1684,7 +1731,7 @@ function update(dt) {
           player.y = ob.y - PLAYER_SIZE;
           player.vy = 0;
           player.onGround = true;
-          if (jumpPressed) { player.vy = JUMP_VEL; player.onGround = false; }
+          if (jumpPressed) { triggerPlayerJump(); }
         } else {
           die();
           return;
@@ -1739,6 +1786,7 @@ function die() {
   spawnParticles(player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2);
   state = "dead";
   deathTime = performance.now();
+  playerTrail = [];
 }
 
 // Goal post drawing at 100% position (Geometry Dash style finish line)
@@ -1846,6 +1894,240 @@ function drawGoalPost(gx, cx, cleared) {
   ctx.restore();
 }
 
+// --- Atmosphere, City Skyline, Jump Rings & Player Trail ---
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateCityLayer(seed, totalWidth, minW, maxW, minH, maxH, isNear) {
+  const r = rng(seed);
+  const buildings = [];
+  let x = 0;
+  while (x < totalWidth) {
+    const w = minW + r() * (maxW - minW);
+    const h = minH + r() * (maxH - minH);
+    const hasAntenna = !isNear && h > (minH + maxH) * 0.52 && r() < 0.45;
+    const antennaH = hasAntenna ? 18 + r() * 42 : 0;
+    const windows = [];
+    if (isNear) {
+      const cols = Math.max(2, Math.floor(w / 18));
+      const rows = Math.max(2, Math.floor(h / 24));
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (r() < 0.38) {
+            const winColor = r() < 0.55 ? "#00e5ff" : (r() < 0.85 ? "#ff00d4" : "#ffd633");
+            windows.push({
+              rx: (col + 0.5) / cols,
+              ry: (row + 0.5) / rows,
+              color: winColor,
+              blinkPhase: r() * Math.PI * 2,
+            });
+          }
+        }
+      }
+    }
+    buildings.push({ x, w, h, hasAntenna, antennaH, windows });
+    x += w + (isNear ? 12 + r() * 32 : 18 + r() * 48);
+  }
+  return buildings;
+}
+
+function initSkyline() {
+  farCityBuildings = generateCityLayer(5, CITY_STRIP_W, 65, 175, 140, 310, false);
+  nearCityBuildings = generateCityLayer(9, CITY_STRIP_W, 45, 130, 60, 200, true);
+}
+
+function drawCityLayer(buildings, stripW, parallaxSpeed, baseColor, edgeColor, cx) {
+  if (!buildings || !buildings.length) {
+    initSkyline();
+    buildings = parallaxSpeed < 0.15 ? farCityBuildings : nearCityBuildings;
+  }
+  const shift = ((cx * parallaxSpeed) % stripW + stripW) % stripW;
+  const time = performance.now() / 1000;
+  ctx.save();
+  for (let offset = -stripW; offset < canvas.width + stripW; offset += stripW) {
+    for (const b of buildings) {
+      const bx = offset + b.x - shift;
+      if (bx + b.w < -20 || bx > canvas.width + 20) continue;
+      const by = GROUND_Y - b.h;
+
+      // Building silhouette
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(bx, by, b.w, b.h);
+
+      // Roof edge highlight
+      ctx.fillStyle = edgeColor;
+      ctx.fillRect(bx, by, b.w, 2);
+
+      // Antenna
+      if (b.hasAntenna) {
+        const ax = bx + b.w / 2;
+        ctx.strokeStyle = edgeColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(ax, by);
+        ctx.lineTo(ax, by - b.antennaH);
+        ctx.stroke();
+        const beacon = Math.sin(time * 3.5 + b.x);
+        if (beacon > 0.1) {
+          ctx.fillStyle = "#ff2255";
+          ctx.shadowColor = "#ff2255";
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(ax, by - b.antennaH, 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      // Windows
+      if (b.windows && b.windows.length) {
+        for (const win of b.windows) {
+          const wx = bx + win.rx * (b.w - 10) + 2;
+          const wy = by + win.ry * (b.h - 16) + 6;
+          const alpha = 0.22 + 0.16 * Math.sin(time * 2.2 + win.blinkPhase);
+          ctx.fillStyle = win.color;
+          ctx.globalAlpha = Math.max(0.08, alpha);
+          ctx.fillRect(wx, wy, 5, 5);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function initAmbientSpecks() {
+  ambientSpecks = [];
+  const r = rng(77);
+  for (let i = 0; i < 48; i++) {
+    ambientSpecks.push({
+      x: r() * canvas.width,
+      y: r() * (GROUND_Y - 20),
+      vx: -12 - r() * 22,
+      vy: (r() - 0.5) * 14,
+      size: 2 + r() * 2.5,
+      color: r() < 0.5 ? "#ff00d4" : "#00f0ff",
+      phase: r() * Math.PI * 2,
+    });
+  }
+}
+
+function updateAmbientSpecks(dt) {
+  if (!ambientSpecks || !ambientSpecks.length) initAmbientSpecks();
+  for (const s of ambientSpecks) {
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    if (s.x < -10) s.x = canvas.width + 10;
+    if (s.x > canvas.width + 10) s.x = -10;
+    if (s.y < 10) s.y = GROUND_Y - 15;
+    if (s.y > GROUND_Y - 10) s.y = 15;
+  }
+}
+
+function drawAmbientSpecks() {
+  if (!ambientSpecks || !ambientSpecks.length) return;
+  const time = performance.now() / 1000;
+  ctx.save();
+  for (const s of ambientSpecks) {
+    const alpha = 0.25 + 0.25 * Math.sin(time * 2.5 + s.phase);
+    ctx.fillStyle = s.color;
+    ctx.globalAlpha = Math.max(0.08, alpha);
+    ctx.shadowColor = s.color;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(s.x, s.y, s.size, s.size);
+  }
+  ctx.restore();
+}
+
+function spawnJumpRing(x, y) {
+  const sparks = [];
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+    sparks.push({
+      angle: a,
+      dist: 14 + Math.random() * 6,
+      speed: 45 + Math.random() * 55,
+      size: 3 + Math.random() * 2,
+    });
+  }
+  jumpRings.push({
+    x,
+    y,
+    r: 12,
+    life: 0.45,
+    maxLife: 0.45,
+    color: "#ffd633",
+    sparks,
+  });
+}
+
+function updateJumpRings(dt) {
+  for (const r of jumpRings) {
+    r.life -= dt;
+    r.r += 95 * dt;
+    for (const sp of r.sparks) {
+      sp.dist += sp.speed * dt;
+    }
+  }
+  jumpRings = jumpRings.filter(r => r.life > 0);
+}
+
+function drawJumpRings(cx) {
+  if (!jumpRings || !jumpRings.length) return;
+  ctx.save();
+  for (const r of jumpRings) {
+    const progress = Math.max(0, r.life / r.maxLife);
+    ctx.save();
+    ctx.globalAlpha = progress * 0.85;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = r.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(r.x - cx, r.y, r.r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = r.color;
+    for (const sp of r.sparks) {
+      const sx = r.x - cx + Math.cos(sp.angle) * sp.dist;
+      const sy = r.y + Math.sin(sp.angle) * sp.dist;
+      ctx.fillRect(sx - sp.size / 2, sy - sp.size / 2, sp.size, sp.size);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function triggerPlayerJump() {
+  player.vy = JUMP_VEL;
+  player.onGround = false;
+  spawnJumpRing(player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2);
+}
+
+function drawPlayerTrail(cx) {
+  if (!playerTrail || !playerTrail.length) return;
+  for (let i = playerTrail.length - 1; i >= 0; i--) {
+    const t = playerTrail[i];
+    const frac = 1 - (i + 1) / (playerTrail.length + 1);
+    ctx.save();
+    ctx.globalAlpha = 0.28 * frac;
+    const px = t.x - cx + PLAYER_SIZE / 2;
+    const py = t.y + PLAYER_SIZE / 2;
+    ctx.translate(px, py);
+    ctx.rotate(t.rotation);
+    const sz = PLAYER_SIZE * (0.85 + 0.15 * frac);
+    drawCube(sz, t.color, t.shape);
+    ctx.restore();
+  }
+}
+
 // Render
 function draw() {
   // Background gradient
@@ -1867,6 +2149,9 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
+  // Floating ambient specks
+  drawAmbientSpecks();
+
   if (state === "splash") { drawSplash(); return; }
   if (state === "start") { drawStartScreen(); return; }
   if (state === "editor") { drawEditor(); return; }
@@ -1875,11 +2160,32 @@ function draw() {
 
   const cx = camera;
 
-  // Ground
+  // 2-layer city skyline in background
+  drawCityLayer(farCityBuildings, CITY_STRIP_W, 0.10, "#130b28", "rgba(255,255,255,0.025)", cx);
+  drawCityLayer(nearCityBuildings, CITY_STRIP_W, 0.25, "#17173b", "rgba(255,255,255,0.045)", cx);
+
+  // Ground with glowing pink line & diagonal texture
+  ctx.save();
   ctx.fillStyle = GROUND_COLOR;
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
-  ctx.fillStyle = ACCENT;
-  ctx.fillRect(0, GROUND_Y, canvas.width, 2);
+  ctx.strokeStyle = "rgba(255,255,255,0.04)";
+  ctx.lineWidth = 1;
+  const stripeOffset = -((cx * 0.5) % 36);
+  ctx.beginPath();
+  for (let x = stripeOffset - 36; x < canvas.width + 50; x += 36) {
+    ctx.moveTo(x, GROUND_Y);
+    ctx.lineTo(x - 30, canvas.height);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = "#ff00d4";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "#ff00d4";
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(canvas.width, GROUND_Y);
+  ctx.stroke();
+  ctx.restore();
 
   // Obstacles
   for (const ob of obstacles) {
@@ -1934,6 +2240,14 @@ function draw() {
   // Goal post (at 100% position)
   const levelEnd = getLevelEnd();
   drawGoalPost(levelEnd, cx, goalCrossed || state === "win");
+
+  // Jump rings
+  drawJumpRings(cx);
+
+  // Player motion trail (vana)
+  if (state === "playing" || state === "win") {
+    drawPlayerTrail(cx);
+  }
 
   // Player
   if (state === "playing" || state === "win") {
@@ -2138,5 +2452,7 @@ function loop(time) {
   requestAnimationFrame(loop);
 }
 
+initSkyline();
+initAmbientSpecks();
 if (!checkURLLevel()) { reset(); }
 requestAnimationFrame((t) => { lastTime = t; loop(t); });
