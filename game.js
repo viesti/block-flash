@@ -39,6 +39,12 @@ let goalCrossed = false;
 let winDelay = 0;
 let goalFlash = 0;
 let goalRipples = [];
+let winTime = 0;
+let winStartTime = 0;
+let winRayAngle = 0;
+let winConfetti = [];
+let winFireworks = [];
+let winNextFirework = 0;
 
 function getLevelEnd(obs = obstacles) {
   return playingEditorLevel || state === "editor"
@@ -90,6 +96,29 @@ let coinTotal = loadCoinTotal();
 let playingEditorLevel = false;
 let levelSelectCopyNext = false;
 
+// Attempt tracking (per-level attempt count saved in localStorage)
+function getAttemptKey() {
+  return playingEditorLevel
+    ? "gdash_attempts_" + (editorLevelName || "editor")
+    : "gdash_attempts_main";
+}
+
+function loadAttempts() {
+  const stored = parseInt(localStorage.getItem(getAttemptKey()), 10);
+  return isNaN(stored) || stored < 1 ? 1 : stored;
+}
+
+function saveAttempts() {
+  try { localStorage.setItem(getAttemptKey(), attemptCount); } catch {}
+}
+
+let attemptCount = loadAttempts();
+
+function nextAttempt() {
+  attemptCount++;
+  saveAttempts();
+}
+
 // URL sharing
 function serializeLevel(name, obstacles) {
   return name + "~" + obstacles.map(o => {
@@ -127,16 +156,34 @@ function getLevelURL(name, obstacles) {
 function checkURLLevel() {
   const params = new URLSearchParams(window.location.search);
   const levelData = params.get("level");
-  if (!levelData) return false;
-  try {
-    const {name, obstacles} = deserializeLevel(decodeURIComponent(levelData));
-    editorObstacles = obstacles;
-    editorLevelName = name || "Shared Level";
-    playingEditorLevel = true;
-    reset(editorObstacles);
-    state = "playing";
+  const urlAttempts = params.get("attempts");
+  if (urlAttempts && !isNaN(parseInt(urlAttempts, 10))) {
+    attemptCount = parseInt(urlAttempts, 10);
+  }
+  const urlCoins = params.get("coins");
+  if (urlCoins && !isNaN(parseInt(urlCoins, 10))) {
+    coinTotal = parseInt(urlCoins, 10);
+  }
+  const testWin = params.get("win") === "1" || params.get("testwin") === "1";
+  if (levelData) {
+    try {
+      const {name, obstacles} = deserializeLevel(decodeURIComponent(levelData));
+      editorObstacles = obstacles;
+      editorLevelName = name || "Shared Level";
+      playingEditorLevel = true;
+      reset(editorObstacles);
+      state = testWin ? "win" : "playing";
+      if (testWin) initWinCelebration();
+      return true;
+    } catch { return false; }
+  }
+  if (testWin) {
+    reset();
+    state = "win";
+    initWinCelebration();
     return true;
-  } catch { return false; }
+  }
+  return false;
 }
 
 function loadCoinTotal() {
@@ -850,17 +897,378 @@ function spawnGoalCelebration(gx, py) {
   }
 }
 
+// Win celebration system (Geometry Dash style victory screen)
+function initWinCelebration() {
+  winTime = 0;
+  winStartTime = performance.now();
+  winRayAngle = 0;
+  winConfetti = [];
+  winFireworks = [];
+  winNextFirework = 0.8;
+
+  // Populate screen with confetti
+  const confettiColors = ["#00f0ff", "#ff0099", "#ffe600", "#00ff66", "#ffffff", "#7038ff"];
+  for (let i = 0; i < 90; i++) {
+    winConfetti.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * (canvas.height + 40) - 40,
+      w: 5 + Math.random() * 4,
+      h: 8 + Math.random() * 8,
+      vx: (Math.random() - 0.5) * 45,
+      vy: 40 + Math.random() * 95,
+      rot: Math.random() * Math.PI * 2,
+      vRot: (Math.random() - 0.5) * 3,
+      flip: Math.random() * Math.PI * 2,
+      vFlip: 3 + Math.random() * 4,
+      color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  // Initial fireworks (one at top-right exactly like image, one on left)
+  spawnFirework(680, 95);
+  spawnFirework(170, 160);
+}
+
+function spawnFirework(x, y) {
+  const count = 30;
+  const spokes = [];
+  const palette = ["#00f0ff", "#2979ff", "#ff1493", "#ffffff", "#ffee00", "#00e5ff"];
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.12;
+    const color = palette[Math.floor(Math.random() * palette.length)];
+    const dashLen = 8 + Math.random() * 8;
+    spokes.push({ angle, color, dashLen });
+  }
+  winFireworks.push({
+    x, y,
+    radius: 6,
+    maxRadius: 52 + Math.random() * 20,
+    spokes,
+    life: 1.0,
+    maxLife: 1.2 + Math.random() * 0.3,
+  });
+}
+
+function updateWinCelebration(dt) {
+  winTime += dt;
+  winRayAngle += dt * 0.14;
+
+  for (const p of winConfetti) {
+    p.x += (p.vx + Math.sin(winTime * 2 + p.phase) * 18) * dt;
+    p.y += p.vy * dt;
+    p.rot += p.vRot * dt;
+    p.flip += p.vFlip * dt;
+    if (p.y > canvas.height + 20) {
+      p.y = -20;
+      p.x = Math.random() * canvas.width;
+    }
+  }
+
+  winNextFirework -= dt;
+  if (winNextFirework <= 0) {
+    spawnFirework(120 + Math.random() * 560, 50 + Math.random() * 150);
+    winNextFirework = 0.9 + Math.random() * 0.8;
+  }
+
+  for (const fw of winFireworks) {
+    fw.life -= dt;
+  }
+  winFireworks = winFireworks.filter(fw => fw.life > 0);
+}
+
+function drawTitleLine(text, cx, y, fontSize, gradY1, gradY2) {
+  ctx.save();
+  ctx.font = `900 ${fontSize}px 'Arial Black', Impact, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+
+  const grad = ctx.createLinearGradient(0, gradY1, 0, gradY2);
+  grad.addColorStop(0, "#fffb66");
+  grad.addColorStop(0.35, "#ffea00");
+  grad.addColorStop(0.72, "#ccff55");
+  grad.addColorStop(1, "#74ffb6");
+
+  // Pass 1: Wide neon yellow bloom
+  ctx.shadowColor = "#ffea00";
+  ctx.shadowBlur = 38;
+  ctx.fillStyle = "#ffea00";
+  ctx.fillText(text, cx, y);
+
+  // Pass 2: Core bloom
+  ctx.shadowColor = "#ffc400";
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, cx, y);
+
+  // Pass 3: Dark contrast outline
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(10, 18, 28, 0.88)";
+  ctx.lineWidth = 7;
+  ctx.strokeText(text, cx, y);
+
+  // Pass 4: Gradient fill
+  ctx.fillStyle = grad;
+  ctx.fillText(text, cx, y);
+
+  // Pass 5: Crisp bright edge highlight
+  ctx.strokeStyle = "rgba(255, 255, 230, 0.92)";
+  ctx.lineWidth = 2.2;
+  ctx.strokeText(text, cx, y);
+
+  ctx.restore();
+}
+
+function drawDetailedCoin(x, y, r) {
+  ctx.save();
+  ctx.shadowColor = "#ffd700";
+  ctx.shadowBlur = 8;
+  const cGrad = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+  cGrad.addColorStop(0, "#fff176");
+  cGrad.addColorStop(0.5, "#ffd700");
+  cGrad.addColorStop(1, "#ff9800");
+  ctx.fillStyle = cGrad;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#b8860b";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.65, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.28, y - r * 0.32, r * 0.22, r * 0.4, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWinScreen() {
+  const cx = canvas.width / 2;
+
+  // 1. Atmosphere overlay
+  ctx.save();
+  ctx.fillStyle = "rgba(10, 8, 24, 0.58)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 2. Neon magenta ground laser beam
+  ctx.strokeStyle = "#ff00d4";
+  ctx.lineWidth = 4;
+  ctx.shadowColor = "#ff00d4";
+  ctx.shadowBlur = 24;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(canvas.width, GROUND_Y);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = "#ffffff";
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(canvas.width, GROUND_Y);
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Sunburst / God Rays from the center diamond
+  const rayCy = 260;
+  ctx.save();
+  const rayGrad = ctx.createRadialGradient(cx, rayCy, 15, cx, rayCy, 650);
+  rayGrad.addColorStop(0, "rgba(255, 255, 205, 0.22)");
+  rayGrad.addColorStop(0.35, "rgba(255, 255, 225, 0.13)");
+  rayGrad.addColorStop(0.7, "rgba(255, 255, 240, 0.05)");
+  rayGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = rayGrad;
+
+  const numRays = 20;
+  const step = (Math.PI * 2) / numRays;
+  const rayWidth = step * 0.44;
+  for (let i = 0; i < numRays; i++) {
+    const angle = winRayAngle + i * step;
+    ctx.beginPath();
+    ctx.moveTo(cx, rayCy);
+    ctx.arc(cx, rayCy, 650, angle - rayWidth / 2, angle + rayWidth / 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 4. Central Glowing Cyan Diamond
+  ctx.save();
+  ctx.translate(cx, rayCy);
+  const pulse = 1 + 0.035 * Math.sin(winTime * 4);
+  ctx.scale(pulse, pulse);
+  ctx.rotate(Math.PI / 4);
+
+  ctx.shadowColor = "#00ffff";
+  ctx.shadowBlur = 32;
+
+  const dSize = 46;
+  const dGrad = ctx.createLinearGradient(-dSize / 2, -dSize / 2, dSize / 2, dSize / 2);
+  dGrad.addColorStop(0, "#d8ffff");
+  dGrad.addColorStop(0.4, "#00f0ff");
+  dGrad.addColorStop(1, "#00bfa5");
+  ctx.fillStyle = dGrad;
+  ctx.fillRect(-dSize / 2, -dSize / 2, dSize, dSize);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-dSize / 2, -dSize / 2, dSize, dSize);
+
+  const innerSize = dSize * 0.46;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.fillRect(-innerSize / 2, -innerSize / 2, innerSize, innerSize);
+  ctx.restore();
+
+  // 5. Fireworks
+  for (const fw of winFireworks) {
+    const progress = 1 - (fw.life / fw.maxLife);
+    const currentR = fw.radius + progress * (fw.maxRadius - fw.radius);
+    const alpha = Math.max(0, fw.life / fw.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    for (const s of fw.spokes) {
+      const r1 = currentR;
+      const r2 = currentR + s.dashLen * (1 - progress * 0.4);
+      const x1 = fw.x + Math.cos(s.angle) * r1;
+      const y1 = fw.y + Math.sin(s.angle) * r1;
+      const x2 = fw.x + Math.cos(s.angle) * r2;
+      const y2 = fw.y + Math.sin(s.angle) * r2;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 6. Confetti
+  for (const p of winConfetti) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.scale(Math.cos(p.flip), 1);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+
+  // 7. Main Title "LEVEL COMPLETE!"
+  drawTitleLine("LEVEL", cx, 110, 58, 80, 138);
+  drawTitleLine("COMPLETE!", cx, 176, 58, 146, 204);
+
+  // 8. Stats Pill Bar
+  const pillW = 430;
+  const pillH = 44;
+  const pillX = cx - pillW / 2;
+  const pillY = 224 - pillH / 2;
+  const pillR = pillH / 2;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 220, 255, 0.35)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "rgba(10, 14, 28, 0.88)";
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(pillX, pillY, pillW, pillH, pillR);
+  } else {
+    ctx.moveTo(pillX + pillR, pillY);
+    ctx.arcTo(pillX + pillW, pillY, pillX + pillW, pillY + pillH, pillR);
+    ctx.arcTo(pillX + pillW, pillY + pillH, pillX, pillY + pillH, pillR);
+    ctx.arcTo(pillX, pillY + pillH, pillX, pillY, pillR);
+    ctx.arcTo(pillX, pillY, pillX + pillW, pillY, pillR);
+    ctx.closePath();
+  }
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(120, 175, 255, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const textY = 224;
+  const leftAnchor = pillX + pillW * 0.17;
+  const midAnchor = pillX + pillW * 0.48;
+  const rightAnchor = pillX + pillW * 0.81;
+
+  // Left: 100%
+  ctx.font = "900 18px 'Arial Black', Impact, monospace, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#00ffb4";
+  ctx.shadowColor = "#00ffb4";
+  ctx.shadowBlur = 9;
+  ctx.fillText("100%", leftAnchor, textY);
+
+  // Mid: Coin + text
+  ctx.shadowBlur = 0;
+  const coinR = 8.5;
+  const coinText = "x  " + coinTotal;
+  ctx.font = "900 18px 'Arial Black', Impact, monospace, sans-serif";
+  const coinTextW = ctx.measureText(coinText).width;
+  const totalCoinW = coinR * 2 + 8 + coinTextW;
+  const coinStartX = midAnchor - totalCoinW / 2;
+  drawDetailedCoin(coinStartX + coinR, textY, coinR);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#ffea00";
+  ctx.shadowColor = "#ffea00";
+  ctx.shadowBlur = 9;
+  ctx.fillText(coinText, coinStartX + coinR * 2 + 8, textY);
+
+  // Right: ATTEMPT N
+  const attemptText = "ATTEMPT " + attemptCount;
+  ctx.font = "900 17px 'Arial Black', Impact, monospace, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "#ffffff";
+  ctx.shadowBlur = 7;
+  ctx.fillText(attemptText, rightAnchor, textY);
+
+  ctx.restore();
+
+  // 9. Replay / continue prompt
+  ctx.save();
+  const promptPulse = 0.65 + 0.35 * Math.sin(winTime * 3);
+  ctx.fillStyle = `rgba(255, 255, 255, ${promptPulse})`;
+  ctx.font = "14px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Click or press Space to play again", cx, 420);
+  if (playingEditorLevel) {
+    ctx.fillText("E = back to editor", cx, 438);
+  }
+  ctx.restore();
+}
+
 // Input
 function onJump() {
   if (state === "editor" || state === "levelSelect" || state === "shop") return;
   if (state === "start") {
-    state = "playing"; playingEditorLevel = false; reset(); return;
+    state = "playing"; playingEditorLevel = false; attemptCount = loadAttempts(); reset(); return;
   }
   if (state === "dead" && performance.now() - deathTime > 500) {
+    nextAttempt();
     if (playingEditorLevel) { reset(editorObstacles); } else { reset(); }
     state = "playing"; return;
   }
-  if (state === "win") {
+  if (state === "win" && performance.now() - winStartTime > 500) {
+    nextAttempt();
     if (playingEditorLevel) { reset(editorObstacles); } else { reset(); }
     state = "playing"; return;
   }
@@ -913,11 +1321,16 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     levelSelectCopyNext = false;
-    if (num === 0) { state = "playing"; playingEditorLevel = false; reset(); return; }
+    if (num === 0) {
+      state = "playing"; playingEditorLevel = false;
+      attemptCount = loadAttempts();
+      reset(); return;
+    }
     if (!isNaN(num) && num >= 1 && num <= savedLevels.length) {
       editorObstacles = savedLevels[num - 1].obstacles.map(o => ({...o}));
       editorLevelName = savedLevels[num - 1].name;
       playingEditorLevel = true;
+      attemptCount = loadAttempts();
       reset(editorObstacles);
       state = "playing";
     }
@@ -989,6 +1402,11 @@ function update(dt) {
   goalRipples = goalRipples.filter(r => r.life > 0);
   if (goalFlash > 0) goalFlash = Math.max(0, goalFlash - dt * 2.5);
 
+  if (state === "win") {
+    updateWinCelebration(dt);
+    return;
+  }
+
   if (state !== "playing") return;
 
   // Move player forward
@@ -1019,6 +1437,7 @@ function update(dt) {
     winDelay -= dt;
     if (winDelay <= 0) {
       state = "win";
+      initWinCelebration();
     }
     return;
   }
@@ -1342,33 +1761,35 @@ function draw() {
   }
 
   // Progress bar
-  ctx.fillStyle = "rgba(255,255,255,0.2)";
-  ctx.fillRect(20, 15, 200, 8);
-  ctx.fillStyle = PLAYER_COLOR;
-  ctx.fillRect(20, 15, score * 2, 8);
-  // Goal beam marker on progress bar (100% mark)
-  ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "#00ff9f";
-  ctx.shadowBlur = 6;
-  ctx.fillRect(219, 11, 3, 16);
-  ctx.fillStyle = "#00ff9f";
-  ctx.fillRect(216, 17, 2, 4);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#fff";
-  ctx.font = "14px monospace";
-  ctx.fillText(score + "%", 230, 24);
-
-  // Coin counter, omitted in levels that have no coins
-  if (coins.length) {
-    ctx.fillStyle = COIN_COLOR;
-    ctx.beginPath();
-    ctx.arc(300, 19, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#b8860b";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  if (state !== "win") {
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.fillRect(20, 15, 200, 8);
+    ctx.fillStyle = PLAYER_COLOR;
+    ctx.fillRect(20, 15, score * 2, 8);
+    // Goal beam marker on progress bar (100% mark)
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "#00ff9f";
+    ctx.shadowBlur = 6;
+    ctx.fillRect(219, 11, 3, 16);
+    ctx.fillStyle = "#00ff9f";
+    ctx.fillRect(216, 17, 2, 4);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = "#fff";
-    ctx.fillText("x " + coinsCollected, 314, 24);
+    ctx.font = "14px monospace";
+    ctx.fillText(score + "%", 230, 24);
+
+    // Coin counter, omitted in levels that have no coins
+    if (coins.length) {
+      ctx.fillStyle = COIN_COLOR;
+      ctx.beginPath();
+      ctx.arc(300, 19, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#b8860b";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText("x " + coinsCollected, 314, 24);
+    }
   }
 
   // Death screen
@@ -1388,17 +1809,7 @@ function draw() {
 
   // Win screen
   if (state === "win") {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = PLAYER_COLOR;
-    ctx.font = "bold 36px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("LEVEL COMPLETE!", canvas.width / 2, canvas.height / 2 - 20);
-    ctx.fillStyle = "#fff";
-    ctx.font = "16px monospace";
-    ctx.fillText("Click or press Space to play again", canvas.width / 2, canvas.height / 2 + 20);
-    if (playingEditorLevel) { ctx.fillText("E = back to editor", canvas.width / 2, canvas.height / 2 + 50); }
-    ctx.textAlign = "left";
+    drawWinScreen();
   }
 
   drawButton(HOME_BTN, "HOME");
