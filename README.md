@@ -42,7 +42,11 @@ Generate CDN importmap using JSPM:
 bb importmap
 ```
 
-Release to S3 (runs tests and uploads via `upload.sh`):
+Release to S3 (runs tests and syncs via `upload.sh`):
 ```bash
 bb release
 ```
+
+- On feature branches (e.g. `squint`), releases to preview path `https://tiuhti.net/tsirppu-dash/branch/<name>/`.
+- On `main`/`master`, releases to production root `https://tiuhti.net/tsirppu-dash/`.
+- Use `bb release --prod` to force production release from any branch, or `bb release --dryrun` to preview file changes without uploading.
