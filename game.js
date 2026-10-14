@@ -330,25 +330,47 @@ function inRect(p, r) {
   return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 }
 
-function editorClick(e) {
-  const {x: mx, y: my} = canvasPos(e.clientX, e.clientY);
-  const worldX = snapToGrid(mx + editorCamera);
-  const worldY = snapToGrid(my);
+function editorPointer(p, isRightClick) {
+  // If tap is on top toolbar (y <= 48):
+  if (p.y <= 48) {
+    if (inRect(p, EDITOR_SPIKE_BTN)) { editorTool = "spike"; return true; }
+    if (inRect(p, EDITOR_BLOCK_BTN)) { editorTool = "block"; return true; }
+    if (inRect(p, EDITOR_ERASER_BTN)) { editorTool = "eraser"; return true; }
+    if (inRect(p, EDITOR_SCROLL_L_BTN)) {
+      editorCamera = Math.max(0, editorCamera - PLAYER_SIZE * 3);
+      return true;
+    }
+    if (inRect(p, EDITOR_SCROLL_R_BTN)) {
+      editorCamera += PLAYER_SIZE * 3;
+      return true;
+    }
+    if (inRect(p, EDITOR_PLAY_BTN)) { startEditorLevel(); return true; }
+    if (inRect(p, EDITOR_SAVE_BTN)) {
+      saveLevel();
+      editorSavedFeedback = 1.5;
+      return true;
+    }
+    if (inRect(p, EDITOR_BACK_BTN)) { state = "start"; return true; }
+    return true; // Click inside toolbar consumed
+  }
 
-  if (e.button === 2 || editorTool === "eraser") {
-    // Delete obstacle at position
+  // Otherwise, place or erase obstacle on grid
+  const worldX = snapToGrid(p.x + editorCamera);
+  const worldY = snapToGrid(p.y);
+
+  if (isRightClick || editorTool === "eraser") {
     const idx = editorObstacles.findIndex(o => {
       if (worldX < o.x || worldX >= o.x + o.w) return false;
       if (o.type === "spike") return worldY >= o.y - o.h && worldY < o.y;
       return worldY >= o.y && worldY < o.y + o.h; // block: y is top-left
     });
     if (idx >= 0) editorObstacles.splice(idx, 1);
-    return;
+    return true;
   }
 
   // Check for existing obstacle at this position
   const exists = editorObstacles.some(o => o.x === worldX && o.y === (editorTool === "spike" ? GROUND_Y : worldY));
-  if (exists) return;
+  if (exists) return true;
 
   if (editorTool === "spike") {
     editorObstacles.push({ type: "spike", x: worldX, y: GROUND_Y, w: PLAYER_SIZE, h: PLAYER_SIZE });
@@ -356,6 +378,7 @@ function editorClick(e) {
     const py = worldY < GROUND_Y ? worldY : GROUND_Y - PLAYER_SIZE;
     editorObstacles.push({ type: "block", x: worldX, y: py, w: PLAYER_SIZE, h: PLAYER_SIZE });
   }
+  return true;
 }
 
 // Draws a cube centred on the current transform origin. The caller owns any
@@ -407,26 +430,63 @@ const SHOP_GAP = 20;
 const SHOP_X0 = (800 - (SHOP_COLS * SHOP_TILE_W + (SHOP_COLS - 1) * SHOP_GAP)) / 2;
 const SHOP_Y0 = 92;
 const SHOP_BACK_BTN = {x: 40, y: 400, w: 110, h: 34};
-const START_SHOP_BTN = {x: 640, y: 18, w: 140, h: 36};
-// Sits clear of the progress bar and coin counter, which hug the top left.
 const HOME_BTN = {x: 690, y: 12, w: 96, h: 30};
 
-// Draws a rounded menu button. A truthy `pulse` makes the outline breathe.
+// Tablet & menu button rects
+let copiedLevelIndex = -1;
+let editorSavedFeedback = 0;
+
+const START_PLAY_BTN = {x: 320, y: 130, w: 160, h: 48};
+const START_EDITOR_BTN = {x: 175, y: 295, w: 140, h: 40};
+const START_LEVELS_BTN = {x: 330, y: 295, w: 140, h: 40};
+const START_SHOP_BTN = {x: 485, y: 295, w: 140, h: 40};
+
+const LEVEL_BACK_BTN = {x: 25, y: 16, w: 95, h: 32};
+const LEVEL_RANDOM_BTN = {x: 160, y: 72, w: 480, h: 36};
+function levelRowBtn(i) { return {x: 160, y: 118 + i * 42, w: 385, h: 36}; }
+function levelCopyBtn(i) { return {x: 555, y: 118 + i * 42, w: 85, h: 36}; }
+
+const EDITOR_SPIKE_BTN = {x: 10, y: 7, w: 76, h: 34};
+const EDITOR_BLOCK_BTN = {x: 92, y: 7, w: 76, h: 34};
+const EDITOR_ERASER_BTN = {x: 174, y: 7, w: 80, h: 34};
+const EDITOR_SCROLL_L_BTN = {x: 264, y: 7, w: 42, h: 34};
+const EDITOR_SCROLL_R_BTN = {x: 312, y: 7, w: 42, h: 34};
+const EDITOR_PLAY_BTN = {x: 520, y: 7, w: 78, h: 34};
+const EDITOR_SAVE_BTN = {x: 604, y: 7, w: 78, h: 34};
+const EDITOR_BACK_BTN = {x: 688, y: 7, w: 86, h: 34};
+
+const DEAD_RETRY_BTN_SOLO = {x: 325, y: 220, w: 150, h: 42};
+const DEAD_RETRY_BTN_PAIR = {x: 245, y: 220, w: 145, h: 42};
+const DEAD_EDITOR_BTN = {x: 410, y: 220, w: 145, h: 42};
+
+const WIN_REPLAY_BTN_SOLO = {x: 325, y: 390, w: 150, h: 38};
+const WIN_REPLAY_BTN_PAIR = {x: 410, y: 390, w: 145, h: 38};
+const WIN_EDITOR_BTN = {x: 245, y: 390, w: 145, h: 38};
+
+// Draws a rounded menu button with optional glow, pulse, and custom styling
 function drawButton(r, label, opts = {}) {
+  ctx.save();
   ctx.fillStyle = opts.fill || "rgba(0,0,0,0.35)";
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.w, r.h, 8);
+  if (ctx.roundRect) {
+    ctx.roundRect(r.x, r.y, r.w, r.h, opts.radius || 8);
+  } else {
+    ctx.rect(r.x, r.y, r.w, r.h);
+  }
   ctx.fill();
+
   ctx.globalAlpha = opts.pulse ? 0.55 + 0.45 * Math.sin(performance.now() / 220) : 1;
   ctx.strokeStyle = opts.stroke || "rgba(255,255,255,0.3)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = opts.lineWidth || 2;
   ctx.stroke();
+
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 15px monospace";
+  ctx.fillStyle = opts.textColor || "#fff";
+  ctx.font = opts.font || "bold 15px monospace";
   ctx.textAlign = "center";
-  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 5);
-  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
+  ctx.restore();
 }
 
 // Leaves a run for the main menu. The next start press builds a fresh level.
@@ -591,37 +651,97 @@ function drawEditor() {
   const editorLevelEnd = getLevelEnd(editorObstacles);
   drawGoalPost(editorLevelEnd, editorCamera, false);
 
-  // HUD
-  ctx.fillStyle = "#fff";
-  ctx.font = "16px monospace";
-  ctx.textAlign = "left";
-  ctx.fillText("EDITOR" + (editorLevelName ? " - " + editorLevelName : ""), 20, 30);
-  ctx.fillText("Tool: " + editorTool.toUpperCase() + " [1=spike 2=block 3=eraser]", 20, 55);
+  // Toolbar
+  ctx.fillStyle = "rgba(14, 10, 26, 0.9)";
+  ctx.fillRect(0, 0, canvas.width, 48);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 48); ctx.lineTo(canvas.width, 48); ctx.stroke();
+
+  // Tool buttons
+  drawButton(EDITOR_SPIKE_BTN, "▲ SPIKE", editorTool === "spike"
+    ? { stroke: SPIKE_COLOR, fill: "rgba(255,34,85,0.28)", textColor: "#fff" }
+    : { stroke: "rgba(255,255,255,0.2)", fill: "rgba(0,0,0,0.4)", textColor: "rgba(255,255,255,0.6)" });
+
+  drawButton(EDITOR_BLOCK_BTN, "■ BLOCK", editorTool === "block"
+    ? { stroke: "#6688ff", fill: "rgba(68,100,255,0.28)", textColor: "#fff" }
+    : { stroke: "rgba(255,255,255,0.2)", fill: "rgba(0,0,0,0.4)", textColor: "rgba(255,255,255,0.6)" });
+
+  drawButton(EDITOR_ERASER_BTN, "✖ ERASE", editorTool === "eraser"
+    ? { stroke: "#ff00ff", fill: "rgba(255,0,255,0.28)", textColor: "#fff" }
+    : { stroke: "rgba(255,255,255,0.2)", fill: "rgba(0,0,0,0.4)", textColor: "rgba(255,255,255,0.6)" });
+
+  // Camera scroll buttons
+  drawButton(EDITOR_SCROLL_L_BTN, "◀", { font: "bold 16px monospace" });
+  drawButton(EDITOR_SCROLL_R_BTN, "▶", { font: "bold 16px monospace" });
+
+  // Level info
   ctx.font = "13px monospace";
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.fillText("Click=place  RightClick=delete  S=save  E=play  Esc=back  ←→=scroll", 20, canvas.height - 15);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText((editorLevelName || "New Level") + " (" + editorObstacles.length + " obj)", 364, 24);
+
+  // Action buttons
+  drawButton(EDITOR_PLAY_BTN, "▶ PLAY", { stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.15)", textColor: PLAYER_COLOR });
+  drawButton(EDITOR_SAVE_BTN, editorSavedFeedback > 0 ? "SAVED!" : "💾 SAVE", { stroke: "#ffd700", fill: "rgba(255,215,0,0.15)", textColor: "#ffd700" });
+  drawButton(EDITOR_BACK_BTN, "◀ BACK");
+
+  // Bottom helper text
+  ctx.font = "12px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("Tap tools or 1/2/3  |  ◀ ▶ or A/D = scroll  |  Tap grid = place/erase  |  SAVE / PLAY / BACK", canvas.width / 2, canvas.height - 12);
+  ctx.textAlign = "left";
 }
 
 function drawLevelSelect() {
+  drawButton(LEVEL_BACK_BTN, "◀ BACK");
+
   ctx.fillStyle = ACCENT;
-  ctx.font = "bold 32px monospace";
+  ctx.font = "bold 28px monospace";
   ctx.textAlign = "center";
-  ctx.fillText("SELECT LEVEL", canvas.width / 2, 60);
+  ctx.textBaseline = "alphabetic";
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 15;
+  ctx.fillText("SELECT LEVEL", canvas.width / 2, 42);
+  ctx.shadowBlur = 0;
 
-  ctx.font = "18px monospace";
-  ctx.fillStyle = "#fff";
-  ctx.fillText("0: Random Level", canvas.width / 2, 110);
+  // Random level
+  drawButton(LEVEL_RANDOM_BTN, "▶ 0: Random Level (Standard)", {
+    stroke: PLAYER_COLOR,
+    fill: "rgba(0,255,136,0.12)",
+    font: "bold 15px monospace",
+    textColor: PLAYER_COLOR,
+  });
 
-  for (let i = 0; i < savedLevels.length; i++) {
-    const y = 145 + i * 35;
-    if (y > canvas.height - 40) break;
-    ctx.fillStyle = "#fff";
-    ctx.fillText((i + 1) + ": " + savedLevels[i].name + " (" + savedLevels[i].obstacles.length + " objects)", canvas.width / 2, y);
+  const maxShow = Math.min(savedLevels.length, 6);
+  if (savedLevels.length === 0) {
+    ctx.font = "15px monospace";
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.textAlign = "center";
+    ctx.fillText("No custom levels saved yet. Create one in the Editor!", canvas.width / 2, 170);
+  } else {
+    for (let i = 0; i < maxShow; i++) {
+      const rowBtn = levelRowBtn(i);
+      const copyBtn = levelCopyBtn(i);
+      const isCopied = copiedLevelIndex === i;
+      const label = (i + 1) + ": " + savedLevels[i].name + " (" + savedLevels[i].obstacles.length + " objects)";
+      drawButton(rowBtn, label, { font: "14px monospace" });
+      drawButton(copyBtn, isCopied ? "COPIED!" : "COPY", {
+        stroke: isCopied ? PLAYER_COLOR : "rgba(0,212,255,0.5)",
+        fill: isCopied ? "rgba(0,255,136,0.18)" : "rgba(0,212,255,0.1)",
+        font: "bold 13px monospace",
+        textColor: isCopied ? PLAYER_COLOR : "#00d4ff",
+      });
+    }
   }
 
-  ctx.font = "14px monospace";
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.fillText("Press number to select  |  C+number = copy URL  |  Esc = back", canvas.width / 2, canvas.height - 20);
+  ctx.font = "13px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.textAlign = "center";
+  ctx.fillText("Tap level to play  |  COPY = share link  |  Number keys / Esc also work", canvas.width / 2, 420);
   ctx.textAlign = "left";
 }
 
@@ -1242,17 +1362,25 @@ function drawWinScreen() {
 
   ctx.restore();
 
-  // 9. Replay / continue prompt
+  // 9. Replay / continue buttons and prompt
   ctx.save();
-  const promptPulse = 0.65 + 0.35 * Math.sin(winTime * 3);
-  ctx.fillStyle = `rgba(255, 255, 255, ${promptPulse})`;
-  ctx.font = "14px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Click or press Space to play again", cx, 420);
   if (playingEditorLevel) {
-    ctx.fillText("E = back to editor", cx, 438);
+    drawButton(WIN_EDITOR_BTN, "🛠 EDITOR", {
+      stroke: "#ffaa00", fill: "rgba(255,170,0,0.16)", textColor: "#ffaa00",
+    });
+    drawButton(WIN_REPLAY_BTN_PAIR, "↻ PLAY AGAIN", {
+      stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.18)", pulse: true, textColor: PLAYER_COLOR,
+    });
+  } else {
+    drawButton(WIN_REPLAY_BTN_SOLO, "↻ PLAY AGAIN", {
+      stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.18)", pulse: true, textColor: PLAYER_COLOR,
+    });
   }
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.font = "12px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("Tap button or press Space to play again" + (playingEditorLevel ? "  |  E = editor" : ""), cx, 440);
   ctx.restore();
 }
 
@@ -1341,44 +1469,129 @@ window.addEventListener("keyup", (e) => {
 });
 // Handles a tap on the menu screens. Returns true once it has been consumed.
 function menuPointer(clientX, clientY) {
+  const p = canvasPos(clientX, clientY);
+
   if (state === "start") {
-    if (inRect(canvasPos(clientX, clientY), START_SHOP_BTN)) { state = "shop"; return true; }
+    if (inRect(p, START_PLAY_BTN)) {
+      state = "playing"; playingEditorLevel = false; attemptCount = loadAttempts(); reset(); return true;
+    }
+    if (inRect(p, START_EDITOR_BTN)) {
+      state = "editor"; editorObstacles = []; editorCamera = 0; editorLevelName = null; return true;
+    }
+    if (inRect(p, START_LEVELS_BTN)) {
+      state = "levelSelect"; return true;
+    }
+    if (inRect(p, START_SHOP_BTN)) {
+      state = "shop"; return true;
+    }
     return false;
   }
-  if (inLevel()) {
-    if (inRect(canvasPos(clientX, clientY), HOME_BTN)) { goHome(); return true; }
-    return false;
+
+  if (state === "levelSelect") {
+    if (inRect(p, LEVEL_BACK_BTN)) {
+      state = "start"; return true;
+    }
+    if (inRect(p, LEVEL_RANDOM_BTN)) {
+      state = "playing"; playingEditorLevel = false; attemptCount = loadAttempts(); reset(); return true;
+    }
+    const maxShow = Math.min(savedLevels.length, 6);
+    for (let i = 0; i < maxShow; i++) {
+      if (inRect(p, levelRowBtn(i))) {
+        editorObstacles = savedLevels[i].obstacles.map(o => ({...o}));
+        editorLevelName = savedLevels[i].name;
+        playingEditorLevel = true;
+        attemptCount = loadAttempts();
+        reset(editorObstacles);
+        state = "playing";
+        return true;
+      }
+      if (inRect(p, levelCopyBtn(i))) {
+        const url = getLevelURL(savedLevels[i].name, savedLevels[i].obstacles);
+        navigator.clipboard.writeText(url).catch(() => {});
+        copiedLevelIndex = i;
+        setTimeout(() => { if (copiedLevelIndex === i) copiedLevelIndex = -1; }, 1500);
+        return true;
+      }
+    }
+    return true;
   }
+
   if (state === "shop") {
-    const p = canvasPos(clientX, clientY);
     if (inRect(p, SHOP_BACK_BTN)) { state = "start"; return true; }
     for (let i = 0; i < SHOP_ITEMS.length; i++) {
       if (inRect(p, shopTileRect(i))) { shopSelect(i); break; }
     }
     return true;
   }
+
+  if (state === "dead") {
+    if (inRect(p, HOME_BTN)) { goHome(); return true; }
+    const retryBtn = playingEditorLevel ? DEAD_RETRY_BTN_PAIR : DEAD_RETRY_BTN_SOLO;
+    if (inRect(p, retryBtn)) {
+      if (performance.now() - deathTime > 300) {
+        nextAttempt();
+        if (playingEditorLevel) { reset(editorObstacles); } else { reset(); }
+        state = "playing";
+      }
+      return true;
+    }
+    if (playingEditorLevel && inRect(p, DEAD_EDITOR_BTN)) {
+      state = "editor";
+      return true;
+    }
+    return false;
+  }
+
+  if (state === "win") {
+    if (inRect(p, HOME_BTN)) { goHome(); return true; }
+    const replayBtn = playingEditorLevel ? WIN_REPLAY_BTN_PAIR : WIN_REPLAY_BTN_SOLO;
+    if (inRect(p, replayBtn)) {
+      if (performance.now() - winStartTime > 300) {
+        nextAttempt();
+        if (playingEditorLevel) { reset(editorObstacles); } else { reset(); }
+        state = "playing";
+      }
+      return true;
+    }
+    if (playingEditorLevel && inRect(p, WIN_EDITOR_BTN)) {
+      state = "editor";
+      return true;
+    }
+    return false;
+  }
+
+  if (inLevel()) {
+    if (inRect(p, HOME_BTN)) { goHome(); return true; }
+    return false;
+  }
+
   return false;
 }
 
 window.addEventListener("keydown", resumeMusic);
 window.addEventListener("pointerdown", resumeMusic);
 
-canvas.addEventListener("mousedown", (e) => {
+function handlePointerDown(clientX, clientY, isRightClick = false) {
   if (state === "splash") { state = "start"; return; }
-  if (state === "editor") { editorClick(e); return; }
-  if (menuPointer(e.clientX, e.clientY)) return;
+  const p = canvasPos(clientX, clientY);
+  if (state === "editor") {
+    editorPointer(p, isRightClick);
+    return;
+  }
+  if (menuPointer(clientX, clientY)) return;
   jumpPressed = true;
   onJump();
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  handlePointerDown(e.clientX, e.clientY, e.button === 2);
 });
 canvas.addEventListener("mouseup", () => { jumpPressed = false; });
 canvas.addEventListener("contextmenu", (e) => { if (state === "editor") e.preventDefault(); });
 canvas.addEventListener("touchstart", (e) => {
   e.preventDefault();
-  if (state === "splash") { state = "start"; return; }
   const t = e.changedTouches[0];
-  if (t && menuPointer(t.clientX, t.clientY)) return;
-  jumpPressed = true;
-  onJump();
+  if (t) handlePointerDown(t.clientX, t.clientY, false);
 });
 canvas.addEventListener("touchend", (e) => { e.preventDefault(); jumpPressed = false; });
 
@@ -1395,6 +1608,7 @@ function collidesAABB(ax, ay, aw, ah, bx, by, bw, bh) {
 
 // Update
 function update(dt) {
+  if (editorSavedFeedback > 0) editorSavedFeedback = Math.max(0, editorSavedFeedback - dt);
   particles.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt * 1.5; });
   particles = particles.filter((p) => p.life > 0);
 
@@ -1794,16 +2008,33 @@ function draw() {
 
   // Death screen
   if (state === "dead") {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.58)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = SPIKE_COLOR;
     ctx.font = "bold 36px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("YOU CRASHED!", canvas.width / 2, canvas.height / 2 - 20);
-    ctx.fillStyle = "#fff";
-    ctx.font = "16px monospace";
-    ctx.fillText("Click or press Space to retry", canvas.width / 2, canvas.height / 2 + 20);
-    if (playingEditorLevel) { ctx.fillText("E = back to editor", canvas.width / 2, canvas.height / 2 + 50); }
+    ctx.shadowColor = SPIKE_COLOR;
+    ctx.shadowBlur = 15;
+    ctx.fillText("YOU CRASHED!", canvas.width / 2, canvas.height / 2 - 45);
+    ctx.shadowBlur = 0;
+
+    if (playingEditorLevel) {
+      drawButton(DEAD_RETRY_BTN_PAIR, "↻ RETRY", {
+        stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.18)", pulse: true, textColor: PLAYER_COLOR,
+      });
+      drawButton(DEAD_EDITOR_BTN, "🛠 EDITOR", {
+        stroke: "#ffaa00", fill: "rgba(255,170,0,0.16)", textColor: "#ffaa00",
+      });
+    } else {
+      drawButton(DEAD_RETRY_BTN_SOLO, "↻ RETRY", {
+        stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.18)", pulse: true, textColor: PLAYER_COLOR,
+      });
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("Tap button or press Space to retry" + (playingEditorLevel ? "  |  E = editor" : ""), canvas.width / 2, canvas.height / 2 + 55);
     ctx.textAlign = "left";
   }
 
@@ -1832,36 +2063,52 @@ function drawSplash() {
 
 function drawStartScreen() {
   ctx.fillStyle = ACCENT;
-  ctx.font = "bold 48px monospace";
+  ctx.font = "bold 46px monospace";
   ctx.textAlign = "center";
   ctx.shadowColor = ACCENT;
   ctx.shadowBlur = 20;
-  ctx.fillText("BLOCK FLASH", canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText("BLOCK FLASH", canvas.width / 2, 85);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = "#fff";
-  ctx.font = "18px monospace";
-  ctx.fillText("Click or press Space to start", canvas.width / 2, canvas.height / 2 + 20);
-
-  ctx.font = "14px monospace";
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.fillText("E = Level Editor  |  L = Saved Levels  |  S = Shop", canvas.width / 2, canvas.height / 2 + 50);
-
-  // Shop button
-  const canBuy = shopHasAffordable();
-  drawButton(START_SHOP_BTN, "SHOP", canBuy
-    ? {stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.12)", pulse: true}
-    : {});
-  ctx.textAlign = "center";
+  // Big Play Button
+  drawButton(START_PLAY_BTN, "▶ PLAY", {
+    stroke: PLAYER_COLOR,
+    fill: "rgba(0, 255, 136, 0.18)",
+    pulse: true,
+    font: "bold 18px monospace",
+    textColor: PLAYER_COLOR,
+  });
 
   // Animated player icon, wearing whatever is equipped
   const t = performance.now() / 1000;
-  const by = Math.sin(t * 3) * 10;
+  const by = Math.sin(t * 3) * 6;
   ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2 + 80 + by);
+  ctx.translate(canvas.width / 2, 225 + by);
   ctx.rotate(t * 2);
-  drawCube(36, equippedColor(), equippedShape());
+  drawCube(38, equippedColor(), equippedShape());
   ctx.restore();
+
+  // Navigation button bar
+  drawButton(START_EDITOR_BTN, "🛠 EDITOR", {
+    stroke: "#ffaa00",
+    fill: "rgba(255, 170, 0, 0.14)",
+    textColor: "#ffaa00",
+  });
+  drawButton(START_LEVELS_BTN, "📋 LEVELS", {
+    stroke: "#00d4ff",
+    fill: "rgba(0, 212, 255, 0.14)",
+    textColor: "#00d4ff",
+  });
+  const canBuy = shopHasAffordable();
+  drawButton(START_SHOP_BTN, "🛒 SHOP", canBuy
+    ? {stroke: PLAYER_COLOR, fill: "rgba(0,255,136,0.18)", pulse: true, textColor: PLAYER_COLOR}
+    : {stroke: "#ff44aa", fill: "rgba(255,68,170,0.14)", textColor: "#ff44aa"});
+
+  // Helper text
+  ctx.font = "13px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.textAlign = "center";
+  ctx.fillText("Space = Play  |  E = Editor  |  L = Levels  |  S = Shop", canvas.width / 2, 360);
 
   // Coins collected across every run so far
   const totalText = "x " + coinTotal + " collected";
