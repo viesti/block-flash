@@ -48,6 +48,7 @@ let winNextFirework = 0;
 
 // City skyline, player trail & atmosphere
 const CITY_STRIP_W = 2400;
+const PLAYER_TRAIL_LENGTH = 16;
 let farCityBuildings = [];
 let nearCityBuildings = [];
 let playerTrail = [];
@@ -1668,7 +1669,7 @@ function update(dt) {
     color: equippedColor(),
     shape: equippedShape(),
   });
-  if (playerTrail.length > 9) playerTrail.length = 9;
+  if (playerTrail.length > PLAYER_TRAIL_LENGTH) playerTrail.length = PLAYER_TRAIL_LENGTH;
 
   // Move player forward
   player.x += GAME_SPEED * dt;
@@ -2117,12 +2118,12 @@ function drawPlayerTrail(cx) {
     const t = playerTrail[i];
     const frac = 1 - (i + 1) / (playerTrail.length + 1);
     ctx.save();
-    ctx.globalAlpha = 0.28 * frac;
+    ctx.globalAlpha = 0.3 * frac;
     const px = t.x - cx + PLAYER_SIZE / 2;
     const py = t.y + PLAYER_SIZE / 2;
     ctx.translate(px, py);
     ctx.rotate(t.rotation);
-    const sz = PLAYER_SIZE * (0.85 + 0.15 * frac);
+    const sz = PLAYER_SIZE * (0.18 + 0.5 * frac);
     drawCube(sz, t.color, t.shape);
     ctx.restore();
   }
