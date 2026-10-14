@@ -1,0 +1,4 @@
+{:tasks
+ {web {:doc "Start local HTTP server (default port 8000)"
+       :task (let [port (or (first *command-line-args*) "8000")]
+               (shell "python3" "-m" "http.server" port))}}}
