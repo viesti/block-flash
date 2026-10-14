@@ -35,6 +35,16 @@ let state = "splash"; // splash | start | playing | dead | win | editor | levelS
 let player, camera, obstacles, coins, coinsCollected, particles, score, deathTime;
 let jumpPressed = false;
 let lastTime = 0;
+let goalCrossed = false;
+let winDelay = 0;
+let goalFlash = 0;
+let goalRipples = [];
+
+function getLevelEnd(obs = obstacles) {
+  return playingEditorLevel || state === "editor"
+    ? Math.max(LEVEL_LENGTH, ...(obs || []).map(o => o.x + o.w + 200))
+    : LEVEL_LENGTH;
+}
 
 // Music: one track for a level run, another for every menu screen
 const levelMusic = new Audio("High-Voltage_Club.mp3");
@@ -253,6 +263,10 @@ function startEditorLevel() {
   coinsCollected = 0;
   particles = [];
   score = 0;
+  goalCrossed = false;
+  winDelay = 0;
+  goalFlash = 0;
+  goalRipples = [];
   state = "playing";
 }
 
@@ -526,6 +540,10 @@ function drawEditor() {
     }
   }
 
+  // Goal post
+  const editorLevelEnd = getLevelEnd(editorObstacles);
+  drawGoalPost(editorLevelEnd, editorCamera, false);
+
   // HUD
   ctx.fillStyle = "#fff";
   ctx.font = "16px monospace";
@@ -778,6 +796,10 @@ function reset(customObstacles) {
   coinsCollected = 0;
   particles = [];
   score = 0;
+  goalCrossed = false;
+  winDelay = 0;
+  goalFlash = 0;
+  goalRipples = [];
 }
 
 function spawnParticles(x, y) {
@@ -802,6 +824,28 @@ function spawnCoinSparkle(x, y) {
       life: 1,
       color: [COIN_COLOR, "#fff8b0"][Math.floor(Math.random() * 2)],
       size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+function spawnGoalCelebration(gx, py) {
+  // Shockwave rings expanding from the gate
+  goalRipples.push({ x: gx, y: py, r: 8, life: 1 });
+  goalRipples.push({ x: gx + 44, y: py, r: 4, life: 1 });
+
+  // Confetti / fireworks particles
+  const colors = ["#ffffff", equippedColor(), "#ffd700", "#ff00ff", "#00ffff", "#ffea00"];
+  for (let i = 0; i < 55; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 120 + Math.random() * 450;
+    particles.push({
+      x: gx + Math.random() * 44,
+      y: py + (Math.random() - 0.5) * 20,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 180,
+      life: 1.2 + Math.random() * 0.6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 3 + Math.random() * 4,
     });
   }
 }
@@ -941,6 +985,10 @@ function update(dt) {
   particles.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt * 1.5; });
   particles = particles.filter((p) => p.life > 0);
 
+  goalRipples.forEach(r => { r.r += 260 * dt; r.life -= dt * 1.8; });
+  goalRipples = goalRipples.filter(r => r.life > 0);
+  if (goalFlash > 0) goalFlash = Math.max(0, goalFlash - dt * 2.5);
+
   if (state !== "playing") return;
 
   // Move player forward
@@ -964,6 +1012,15 @@ function update(dt) {
     player.rotation += 6 * dt;
   } else {
     player.rotation = Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+  }
+
+  // If goal was crossed, player glides smoothly through the goalpost into victory
+  if (goalCrossed) {
+    winDelay -= dt;
+    if (winDelay <= 0) {
+      state = "win";
+    }
+    return;
   }
 
   // Block landing (stand on blocks)
@@ -1031,16 +1088,17 @@ function update(dt) {
   if (player.y > canvas.height + 100) { die(); return; }
 
   // Level end
-  const levelEnd = playingEditorLevel
-    ? Math.max(LEVEL_LENGTH, ...obstacles.map(o => o.x + o.w + 200))
-    : LEVEL_LENGTH;
+  const levelEnd = getLevelEnd();
 
   // Progress
   score = Math.min(100, Math.floor(((player.x - 100) / (levelEnd - 100)) * 100));
 
-  // Win
+  // Goal crossing: when player reaches the 100% goalpost
   if (player.x >= levelEnd) {
-    state = "win";
+    goalCrossed = true;
+    goalFlash = 1.0;
+    winDelay = 0.45;
+    spawnGoalCelebration(levelEnd, player.y + PLAYER_SIZE / 2);
   }
 }
 
@@ -1048,6 +1106,111 @@ function die() {
   spawnParticles(player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2);
   state = "dead";
   deathTime = performance.now();
+}
+
+// Goal post drawing at 100% position (Geometry Dash style finish line)
+function drawGoalPost(gx, cx, cleared) {
+  const sx = gx - cx;
+  if (sx < -100 || sx > canvas.width + 100) return;
+
+  const t = performance.now() / 1000;
+  const pulse = cleared ? 1.4 : 0.85 + 0.15 * Math.sin(t * 3.5);
+
+  ctx.save();
+
+  // 1. Cyan-green luminous glow aura (from top of screen to ground)
+  const auraW = 48;
+  const auraGrad = ctx.createLinearGradient(sx - auraW, 0, sx + auraW, 0);
+  auraGrad.addColorStop(0, "rgba(0, 230, 140, 0)");
+  auraGrad.addColorStop(0.2, `rgba(0, 230, 140, ${0.12 * pulse})`);
+  auraGrad.addColorStop(0.4, `rgba(30, 245, 160, ${0.35 * pulse})`);
+  auraGrad.addColorStop(0.5, `rgba(90, 255, 195, ${0.6 * pulse})`);
+  auraGrad.addColorStop(0.6, `rgba(30, 245, 160, ${0.35 * pulse})`);
+  auraGrad.addColorStop(0.8, `rgba(0, 230, 140, ${0.12 * pulse})`);
+  auraGrad.addColorStop(1, "rgba(0, 230, 140, 0)");
+  ctx.fillStyle = auraGrad;
+  ctx.fillRect(sx - auraW, 0, auraW * 2, GROUND_Y);
+
+  // Subtle horizontal beam grain / scanlines in aura
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.05 * pulse})`;
+  for (let y = 10; y < GROUND_Y; y += 16) {
+    ctx.fillRect(sx - auraW + 8, y, (auraW - 8) * 2, 1);
+  }
+
+  // 2. Neon Chevrons (>) stacked along the left side of the beam
+  const apexX = sx - 6;
+  const chW = 14;
+  const chH = 9;
+  const count = 9;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "miter";
+  for (let i = 0; i < count; i++) {
+    const cy = GROUND_Y - 22 - i * 36;
+    if (cy < 15) continue;
+    const wave = Math.sin(t * 5.5 - i * 0.6);
+    const chAlpha = cleared ? 1 : 0.72 + 0.28 * wave;
+    ctx.strokeStyle = `rgba(0, 255, 165, ${chAlpha})`;
+    ctx.shadowColor = "#00ff9f";
+    ctx.shadowBlur = cleared ? 16 : 8;
+    ctx.beginPath();
+    ctx.moveTo(apexX - chW, cy - chH);
+    ctx.lineTo(apexX, cy);
+    ctx.lineTo(apexX - chW, cy + chH);
+    ctx.stroke();
+  }
+
+  // 3. Central bright white goal line (spans all the way from y=0 to GROUND_Y)
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = cleared ? "#aaffdd" : "#ffffff";
+  ctx.shadowBlur = cleared ? 25 : 12 * pulse;
+  ctx.fillRect(sx - 2, 0, 4, GROUND_Y);
+
+  // Subtle cyan edge fringe along the white beam
+  ctx.fillStyle = "rgba(120, 255, 220, 0.65)";
+  ctx.shadowBlur = 0;
+  ctx.fillRect(sx - 3, 0, 1, GROUND_Y);
+  ctx.fillRect(sx + 2, 0, 1, GROUND_Y);
+
+  // 4. Checkered finish block on the right (2 columns x 6 rows)
+  const sqSize = 18;
+  const cols = 2;
+  const rows = 6;
+  const blockX = sx + 4;
+  const blockW = cols * sqSize; // 36px wide
+  const blockH = rows * sqSize; // 108px high
+  const blockY = GROUND_Y - blockH;
+
+  for (let r = 0; r < rows; r++) {
+    // r = 0 is bottom row, r = 5 is top row
+    const y = GROUND_Y - (r + 1) * sqSize;
+    for (let c = 0; c < cols; c++) {
+      const x = blockX + c * sqSize;
+      const isWhite = (r + c) % 2 === 0;
+      ctx.fillStyle = isWhite ? "#f2f2f6" : "#14141e";
+      ctx.fillRect(x, y, sqSize, sqSize);
+    }
+  }
+
+  // Chromatic glitch fringes on checkered block
+  ctx.fillStyle = "rgba(0, 240, 255, 0.75)";
+  ctx.fillRect(blockX, blockY, 1.5, blockH);
+  ctx.fillRect(blockX + blockW - 1.5, blockY, 1.5, blockH);
+  ctx.fillStyle = "rgba(255, 35, 85, 0.85)";
+  ctx.fillRect(blockX + sqSize - 0.75, blockY, 1.5, blockH);
+
+  // Subtle outer edge stroke
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(blockX, blockY, blockW, blockH);
+
+  // 5. Extra flare when cleared
+  if (cleared) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.fillRect(sx - 15, 0, 30, GROUND_Y);
+  }
+
+  ctx.restore();
 }
 
 // Render
@@ -1135,14 +1298,32 @@ function draw() {
     ctx.fill();
   }
 
+  // Goal post (at 100% position)
+  const levelEnd = getLevelEnd();
+  drawGoalPost(levelEnd, cx, goalCrossed || state === "win");
+
   // Player
-  if (state === "playing") {
+  if (state === "playing" || state === "win") {
     ctx.save();
     const px = player.x - cx + PLAYER_SIZE / 2;
     const py = player.y + PLAYER_SIZE / 2;
     ctx.translate(px, py);
     ctx.rotate(player.rotation);
     drawCube(PLAYER_SIZE, equippedColor(), equippedShape());
+    ctx.restore();
+  }
+
+  // Shockwave ripples
+  for (const r of goalRipples) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, r.life);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3 * r.life;
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(r.x - cx, r.y, r.r, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1154,11 +1335,25 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
+  // Goal screen flash
+  if (goalFlash > 0) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${goalFlash * 0.35})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
   // Progress bar
   ctx.fillStyle = "rgba(255,255,255,0.2)";
   ctx.fillRect(20, 15, 200, 8);
   ctx.fillStyle = PLAYER_COLOR;
   ctx.fillRect(20, 15, score * 2, 8);
+  // Goal beam marker on progress bar (100% mark)
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = "#00ff9f";
+  ctx.shadowBlur = 6;
+  ctx.fillRect(219, 11, 3, 16);
+  ctx.fillStyle = "#00ff9f";
+  ctx.fillRect(216, 17, 2, 4);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = "#fff";
   ctx.font = "14px monospace";
   ctx.fillText(score + "%", 230, 24);
