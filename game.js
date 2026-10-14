@@ -1173,36 +1173,6 @@ function drawTitleLine(text, cx, y, fontSize, gradY1, gradY2) {
   ctx.restore();
 }
 
-function drawDetailedCoin(x, y, r) {
-  ctx.save();
-  ctx.shadowColor = "#ffd700";
-  ctx.shadowBlur = 8;
-  const cGrad = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-  cGrad.addColorStop(0, "#fff176");
-  cGrad.addColorStop(0.5, "#ffd700");
-  cGrad.addColorStop(1, "#ff9800");
-  ctx.fillStyle = cGrad;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "#b8860b";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(x, y, r * 0.65, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
-  ctx.beginPath();
-  ctx.ellipse(x - r * 0.28, y - r * 0.32, r * 0.22, r * 0.4, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
 
 function drawWinScreen() {
   const cx = canvas.width / 2;
@@ -1325,77 +1295,7 @@ function drawWinScreen() {
   drawTitleLine("LEVEL", cx, 110, 58, 80, 138);
   drawTitleLine("COMPLETE!", cx, 176, 58, 146, 204);
 
-  // 8. Stats Pill Bar
-  const pillW = 430;
-  const pillH = 44;
-  const pillX = cx - pillW / 2;
-  const pillY = 224 - pillH / 2;
-  const pillR = pillH / 2;
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 220, 255, 0.35)";
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = "rgba(10, 14, 28, 0.88)";
-  ctx.beginPath();
-  if (ctx.roundRect) {
-    ctx.roundRect(pillX, pillY, pillW, pillH, pillR);
-  } else {
-    ctx.moveTo(pillX + pillR, pillY);
-    ctx.arcTo(pillX + pillW, pillY, pillX + pillW, pillY + pillH, pillR);
-    ctx.arcTo(pillX + pillW, pillY + pillH, pillX, pillY + pillH, pillR);
-    ctx.arcTo(pillX, pillY + pillH, pillX, pillY, pillR);
-    ctx.arcTo(pillX, pillY, pillX + pillW, pillY, pillR);
-    ctx.closePath();
-  }
-  ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(120, 175, 255, 0.45)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  const textY = 224;
-  const leftAnchor = pillX + pillW * 0.17;
-  const midAnchor = pillX + pillW * 0.48;
-  const rightAnchor = pillX + pillW * 0.81;
-
-  // Left: 100%
-  ctx.font = "900 18px 'Arial Black', Impact, monospace, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#00ffb4";
-  ctx.shadowColor = "#00ffb4";
-  ctx.shadowBlur = 9;
-  ctx.fillText("100%", leftAnchor, textY);
-
-  // Mid: Coin + text
-  ctx.shadowBlur = 0;
-  const coinR = 8.5;
-  const coinText = "x  " + coinTotal;
-  ctx.font = "900 18px 'Arial Black', Impact, monospace, sans-serif";
-  const coinTextW = ctx.measureText(coinText).width;
-  const totalCoinW = coinR * 2 + 8 + coinTextW;
-  const coinStartX = midAnchor - totalCoinW / 2;
-  drawDetailedCoin(coinStartX + coinR, textY, coinR);
-
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#ffea00";
-  ctx.shadowColor = "#ffea00";
-  ctx.shadowBlur = 9;
-  ctx.fillText(coinText, coinStartX + coinR * 2 + 8, textY);
-
-  // Right: ATTEMPT N
-  const attemptText = "ATTEMPT " + attemptCount;
-  ctx.font = "900 17px 'Arial Black', Impact, monospace, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "#ffffff";
-  ctx.shadowBlur = 7;
-  ctx.fillText(attemptText, rightAnchor, textY);
-
-  ctx.restore();
-
-  // 9. Replay / continue buttons and prompt
+  // 8. Replay / continue buttons and prompt
   ctx.save();
   if (playingEditorLevel) {
     drawButton(WIN_EDITOR_BTN, "🛠 EDITOR", {
