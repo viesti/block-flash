@@ -1,7 +1,17 @@
 #!/bin/bash
+set -euo pipefail
 
-aws --profile tiuhti s3 cp index.html s3://tiuhti-web/tsirppu-dash/
-aws --profile tiuhti s3 cp game.js s3://tiuhti-web/tsirppu-dash/
-aws --profile tiuhti s3 cp dist/ s3://tiuhti-web/tsirppu-dash/dist/ --recursive
-aws --profile tiuhti s3 cp High-Voltage_Club.mp3 s3://tiuhti-web/tsirppu-dash/High-Voltage_Club.mp3
-aws --profile tiuhti s3 cp Relaxing_Techno.mp3 s3://tiuhti-web/tsirppu-dash/Relaxing_Techno.mp3
+STAGE_DIR="target/public"
+
+# Prepare staging directory with deployable assets
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+cp -p index.html game.js *.mp3 "$STAGE_DIR/"
+cp -rp dist "$STAGE_DIR/"
+
+# Sync to S3, pruning obsolete files while preserving trailer/
+aws --profile tiuhti s3 sync "$STAGE_DIR/" s3://tiuhti-web/tsirppu-dash/ \
+  --exclude "trailer/*" \
+  --delete \
+  "$@"
+
