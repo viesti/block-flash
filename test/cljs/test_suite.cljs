@@ -181,7 +181,8 @@
     (let [generated (build-level)]
       (is (pos? (.-length generated)))
       (let [coins (place-coins generated)]
-        (is (js/Array.isArray coins))))))
+        (is (js/Array.isArray coins))
+        (is (pos? (.-length coins)))))))
 
 ;; Run tests and exit with non-zero status on failures
 (let [summary (run-tests)]

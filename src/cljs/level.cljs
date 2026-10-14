@@ -123,7 +123,7 @@
 (defn stand-surfaces
   "Surfaces the player can come to rest on."
   [obstacles]
-  (into [{:x (- js/Infinity) :w js/Infinity :top GROUND_Y}]
+  (into [{:x -1000 :w js/Infinity :top GROUND_Y}]
         (-> (.filter obstacles (fn [ob] (= (.-type ob) "block")))
             (.map (fn [ob] {:x (.-x ob) :w (.-w ob) :top (.-y ob)})))))
 
