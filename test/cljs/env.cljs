@@ -1,12 +1,31 @@
 (ns test.env)
 
+(def clipboard-last-written (atom nil))
+
 ;; 1. Window & Navigator
-(set! (.-window js/globalThis)
-      #js {:location #js {:search "?win=1" :origin "http://localhost" :pathname "/"}
-           :navigator #js {:clipboard #js {:writeText (fn [_] (js/Promise.resolve))}}
-           :addEventListener (fn [_ _])
-           :innerWidth 800
-           :innerHeight 450})
+(let [listeners (atom {})
+      clip #js {:writeText (fn [txt]
+                             (reset! clipboard-last-written txt)
+                             (js/Promise.resolve))}]
+  (try
+    (js/Object.defineProperty js/navigator "clipboard"
+      #js {:value clip :configurable true :writable true})
+    (catch :default _
+      (set! (.-clipboard js/navigator) clip)))
+  (set! (.-window js/globalThis)
+        #js {:location #js {:search "?win=1" :origin "http://localhost" :pathname "/"}
+             :navigator #js {:clipboard clip}
+             :addEventListener (fn [evt-type handler]
+                                 (swap! listeners update evt-type (fnil conj []) handler))
+             :dispatchEvent (fn [evt]
+                              (doseq [handler (get @listeners (.-type evt))]
+                                (handler evt)))
+             :listeners listeners
+             :innerWidth 800
+             :innerHeight 450}))
+
+(set! (.-prompt js/globalThis) (fn [_ _] nil))
+(set! (.-prompt (.-window js/globalThis)) (fn [_ _] nil))
 
 ;; 2. Document & 2D Canvas Mock
 (set! (.-document js/globalThis)

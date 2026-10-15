@@ -15,16 +15,17 @@
 
 (defn save-level []
   (let [name (js/prompt "Level name:" (or (.-editorLevelName game-state) ""))]
-    (when name
-      (set! (.-editorLevelName game-state) name)
-      (let [idx (.findIndex (.-savedLevels game-state) (fn [l] (= (.-name l) name)))
-            data {:name name
-                  :obstacles (.map (.-editorObstacles game-state)
-                                   (fn [o] {:type (.-type o) :x (.-x o) :y (.-y o) :w (.-w o) :h (.-h o)}))}]
-        (if (>= idx 0)
-          (aset (.-savedLevels game-state) idx data)
-          (.push (.-savedLevels game-state) data))
-        (save-levels (.-savedLevels game-state))))))
+    (when (and (some? name) (pos? (.-length (.trim name))))
+      (let [trimmed (.trim name)]
+        (set! (.-editorLevelName game-state) trimmed)
+        (let [idx (.findIndex (.-savedLevels game-state) (fn [l] (= (.-name l) trimmed)))
+              data {:name trimmed
+                    :obstacles (.map (.-editorObstacles game-state)
+                                     (fn [o] {:type (.-type o) :x (.-x o) :y (.-y o) :w (.-w o) :h (.-h o)}))}]
+          (if (>= idx 0)
+            (aset (.-savedLevels game-state) idx data)
+            (.push (.-savedLevels game-state) data))
+          (save-levels (.-savedLevels game-state)))))))
 
 (defn start-editor-level []
   (set! (.-playingEditorLevel game-state) true)

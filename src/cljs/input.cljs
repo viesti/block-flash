@@ -250,35 +250,35 @@
                                (or (= (.-code e) "ArrowRight") (= (.-code e) "KeyD"))
                                (set! (.-editorCamera game-state)
                                      (+ (.-editorCamera game-state) (* PLAYER_SIZE 3)))))
-                           (when (and (= (.-state game-state) "levelSelect") (= (.-code e) "KeyC"))
-                             (set! (.-levelSelectCopyNext game-state) true))
                            (when (= (.-state game-state) "levelSelect")
-                             (let [num (js/parseInt (.-key e))]
-                               (if (and (.-levelSelectCopyNext game-state)
-                                        (not (js/isNaN num))
-                                        (>= num 1)
-                                        (<= num (.-length (.-savedLevels game-state))))
-                                 (let [lv (aget (.-savedLevels game-state) (dec num))]
-                                   (.writeText (.-clipboard js/navigator) (get-level-url (.-name lv) (.-obstacles lv)))
-                                   (set! (.-levelSelectCopyNext game-state) false))
-                                 (do
-                                   (set! (.-levelSelectCopyNext game-state) false)
-                                   (cond
-                                     (zero? num)
-                                     (do
-                                       (set! (.-state game-state) "playing")
-                                       (set! (.-playingEditorLevel game-state) false)
-                                       (set! (.-attemptCount game-state) (load-attempts (get-attempt-key)))
-                                       (reset))
-                                     (and (not (js/isNaN num)) (>= num 1) (<= num (.-length (.-savedLevels game-state))))
-                                     (let [lv (aget (.-savedLevels game-state) (dec num))]
-                                       (set! (.-editorObstacles game-state)
-                                             (.map (.-obstacles lv) (fn [o] (js/Object.assign #js {} o))))
-                                       (set! (.-editorLevelName game-state) (.-name lv))
-                                       (set! (.-playingEditorLevel game-state) true)
-                                       (set! (.-attemptCount game-state) (load-attempts (get-attempt-key)))
-                                       (reset (.-editorObstacles game-state))
-                                       (set! (.-state game-state) "playing")))))))))))
+                             (if (= (.-code e) "KeyC")
+                               (set! (.-levelSelectCopyNext game-state) true)
+                               (let [num (js/parseInt (.-key e))]
+                                 (if (and (.-levelSelectCopyNext game-state)
+                                          (not (js/isNaN num))
+                                          (>= num 1)
+                                          (<= num (.-length (.-savedLevels game-state))))
+                                   (let [lv (aget (.-savedLevels game-state) (dec num))]
+                                     (.writeText (.-clipboard js/navigator) (get-level-url (.-name lv) (.-obstacles lv)))
+                                     (set! (.-levelSelectCopyNext game-state) false))
+                                   (do
+                                     (set! (.-levelSelectCopyNext game-state) false)
+                                     (cond
+                                       (zero? num)
+                                       (do
+                                         (set! (.-state game-state) "playing")
+                                         (set! (.-playingEditorLevel game-state) false)
+                                         (set! (.-attemptCount game-state) (load-attempts (get-attempt-key)))
+                                         (reset))
+                                       (and (not (js/isNaN num)) (>= num 1) (<= num (.-length (.-savedLevels game-state))))
+                                       (let [lv (aget (.-savedLevels game-state) (dec num))]
+                                         (set! (.-editorObstacles game-state)
+                                               (.map (.-obstacles lv) (fn [o] (js/Object.assign #js {} o))))
+                                         (set! (.-editorLevelName game-state) (.-name lv))
+                                         (set! (.-playingEditorLevel game-state) true)
+                                         (set! (.-attemptCount game-state) (load-attempts (get-attempt-key)))
+                                         (reset (.-editorObstacles game-state))
+                                         (set! (.-state game-state) "playing"))))))))))))
 
   (.addEventListener js/window "keyup"
                      (fn [e]

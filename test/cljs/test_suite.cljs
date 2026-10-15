@@ -1,11 +1,12 @@
 (ns test.test-suite
   (:require [clojure.test :refer [deftest is testing run-tests successful?]]
-            ["./env.js"]
+            ["./env.js" :refer [clipboard-last-written]]
             ["../dist/main.js" :refer [check-url-level]]
             ["../dist/state.js" :refer [game-state]]
             ["../dist/gameplay.js" :refer [update draw reset]]
             ["../dist/input.js" :refer [on-jump handle-pointer-down]]
             ["../dist/shop.js" :refer [shop-select]]
+            ["../dist/editor.js" :refer [save-level]]
             ["../dist/level.js" :refer [serialize-level deserialize-level place-coins build-level]]
             ["../dist/physics.js" :refer [collides-aabb collides-with-spike resolve-sim]]
             ["../dist/constants.js" :refer [PLAYER_SIZE GROUND_Y GRAVITY JUMP_VEL GAME_SPEED]]))
@@ -157,6 +158,56 @@
     (let [before-count (.-length (.-editorObstacles game-state))]
       (handle-pointer-down 400 200)
       (is (> (.-length (.-editorObstacles game-state)) before-count)))))
+
+(deftest test-editor-save-validation
+  (testing "save-level rejects empty, blank, or cancelled prompt inputs"
+    (set! (.-editorLevelName game-state) "InitialName")
+    (let [saved-count (.-length (.-savedLevels game-state))]
+      ;; 1. Cancelled prompt (nil)
+      (set! (.-prompt js/globalThis) (fn [_ _] nil))
+      (save-level)
+      (is (= "InitialName" (.-editorLevelName game-state)))
+      (is (= saved-count (.-length (.-savedLevels game-state))))
+
+      ;; 2. Empty string prompt ("")
+      (set! (.-prompt js/globalThis) (fn [_ _] ""))
+      (save-level)
+      (is (= "InitialName" (.-editorLevelName game-state)))
+      (is (= saved-count (.-length (.-savedLevels game-state))))
+
+      ;; 3. Whitespace-only prompt ("   ")
+      (set! (.-prompt js/globalThis) (fn [_ _] "   "))
+      (save-level)
+      (is (= "InitialName" (.-editorLevelName game-state)))
+      (is (= saved-count (.-length (.-savedLevels game-state))))
+
+      ;; 4. Valid name prompt ("  Custom Level  ") trims and saves
+      (set! (.-prompt js/globalThis) (fn [_ _] "  Custom Level  "))
+      (save-level)
+      (is (= "Custom Level" (.-editorLevelName game-state)))
+      (is (= (inc saved-count) (.-length (.-savedLevels game-state)))))))
+
+(deftest test-level-select-key-c-copy
+  (testing "KeyC in levelSelect toggles levelSelectCopyNext without immediate reset"
+    (set! (.-state game-state) "levelSelect")
+    (set! (.-levelSelectCopyNext game-state) false)
+    (set! (.-savedLevels game-state)
+          #js [#js {:name "CopyMe" :obstacles #js []}])
+
+    ;; Dispatch KeyC keydown event
+    ((.-dispatchEvent (.-window js/globalThis))
+     #js {:type "keydown" :code "KeyC" :key "c" :preventDefault (fn [])})
+
+    (is (true? (.-levelSelectCopyNext game-state)))
+
+    ;; Dispatch 1 keydown event to copy level 1
+    ((.-dispatchEvent (.-window js/globalThis))
+     #js {:type "keydown" :code "Digit1" :key "1" :preventDefault (fn [])})
+
+    (is (false? (.-levelSelectCopyNext game-state)))
+    (let [last-written @clipboard-last-written]
+      (is (some? last-written))
+      (is (pos? (.indexOf last-written "CopyMe"))))))
 
 (deftest test-menu-screens
   (testing "Start and splash screens render without errors"
