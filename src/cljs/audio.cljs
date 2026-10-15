@@ -1,5 +1,5 @@
 (ns audio
-  (:require ["./state.js" :refer [game-state]]))
+  (:require [state :refer [game-state]]))
 
 ;; Music: one track for a level run, another for every menu screen
 (def level-music (js/Audio. "High-Voltage_Club.mp3"))

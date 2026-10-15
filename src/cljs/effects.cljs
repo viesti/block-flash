@@ -1,8 +1,8 @@
 (ns effects
-  (:require ["./constants.js" :refer [GROUND_Y PLAYER_SIZE COIN_COLOR ACCENT CITY_STRIP_W]]
-            ["./canvas.js" :refer [canvas ctx draw-cube]]
-            ["./shop.js" :refer [equipped-color equipped-shape]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [GROUND_Y PLAYER_SIZE COIN_COLOR ACCENT CITY_STRIP_W]]
+            [canvas :refer [ctx draw-cube]]
+            [shop :refer [equipped-color equipped-shape]]
+            [state :refer [game-state]]))
 
 (defn rng [seed]
   (let [s (atom (bit-or seed 0))]
@@ -61,10 +61,10 @@
         time (/ (.now js/performance) 1000)]
     (.save ctx)
     (loop [offset (- stripW)]
-      (when (< offset (+ (.-width canvas) stripW))
+      (when (< offset (+ (.-width canvas/canvas) stripW))
         (doseq [b buildings]
           (let [bx (- (+ offset (.-x b)) shift)]
-            (when-not (or (< (+ bx (.-w b)) -20) (> bx (+ (.-width canvas) 20)))
+            (when-not (or (< (+ bx (.-w b)) -20) (> bx (+ (.-width canvas/canvas) 20)))
               (let [by (- GROUND_Y (.-h b))]
                 ;; Building silhouette
                 (set! (.-fillStyle ctx) baseColor)
@@ -111,7 +111,7 @@
   (let [r (rng 77)]
     (dotimes [_ 48]
       (.push (.-ambientSpecks game-state)
-             {:x (* (r) (.-width canvas))
+             {:x (* (r) (.-width canvas/canvas))
               :y (* (r) (- GROUND_Y 20))
               :vx (- -12 (* (r) 22))
               :vy (* (- (r) 0.5) 14)
@@ -126,8 +126,8 @@
     (set! (.-x s) (+ (.-x s) (* (.-vx s) dt)))
     (set! (.-y s) (+ (.-y s) (* (.-vy s) dt)))
     (when (< (.-x s) -10)
-      (set! (.-x s) (+ (.-width canvas) 10)))
-    (when (> (.-x s) (+ (.-width canvas) 10))
+      (set! (.-x s) (+ (.-width canvas/canvas) 10)))
+    (when (> (.-x s) (+ (.-width canvas/canvas) 10))
       (set! (.-x s) -10))
     (when (< (.-y s) 10)
       (set! (.-y s) (- GROUND_Y 15)))
@@ -258,7 +258,7 @@
 
 (defn draw-goal-post [gx cx cleared]
   (let [sx (- gx cx)]
-    (when-not (or (< sx -100) (> sx (+ (.-width canvas) 100)))
+    (when-not (or (< sx -100) (> sx (+ (.-width canvas/canvas) 100)))
       (let [t (/ (.now js/performance) 1000)
             pulse (if cleared 1.4 (+ 0.85 (* 0.15 (js/Math.sin (* t 3.5)))))]
         (.save ctx)

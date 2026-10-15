@@ -1,5 +1,5 @@
 (ns physics
-  (:require ["./constants.js" :refer [PLAYER_SIZE]]))
+  (:require [constants :refer [PLAYER_SIZE]]))
 
 (defn collides-with-spike
   [px py ps sx sy sw sh]

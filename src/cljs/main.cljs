@@ -1,13 +1,13 @@
 (ns main
-  (:require ["./state.js" :refer [game-state get-attempt-key]]
-            ["./storage.js" :refer [load-levels load-coin-total load-owned load-equipped load-attempts]]
-            ["./shop.js" :refer [free-items all-item-ids is-valid-item]]
-            ["./effects.js" :refer [init-skyline init-ambient-specks]]
-            ["./level.js" :refer [deserialize-level]]
-            ["./win.js" :refer [init-win-celebration]]
-            ["./audio.js" :refer [sync-music]]
-            ["./gameplay.js" :refer [reset update draw]]
-            ["./input.js" :refer [setup-input]]))
+  (:require [state :refer [game-state get-attempt-key]]
+            [storage :refer [load-levels load-coin-total load-owned load-equipped load-attempts]]
+            [shop :refer [free-items all-item-ids is-valid-item]]
+            [effects :refer [init-skyline init-ambient-specks]]
+            [level :refer [deserialize-level]]
+            [win :refer [init-win-celebration]]
+            [audio :refer [sync-music]]
+            [gameplay :refer [reset update draw]]
+            [input :refer [setup-input]]))
 
 (defn check-url-level []
   (let [params (js/URLSearchParams. (.-search (.-location js/window)))

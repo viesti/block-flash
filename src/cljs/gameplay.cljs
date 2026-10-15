@@ -1,22 +1,22 @@
 (ns gameplay
-  (:require ["./constants.js" :refer [GROUND_Y PLAYER_SIZE GRAVITY JUMP_VEL
-                                      GAME_SPEED COIN_RADIUS PLAYER_COLOR GROUND_COLOR
-                                      SPIKE_COLOR BLOCK_COLOR CITY_STRIP_W
-                                      PLAYER_TRAIL_LENGTH BG_COLORS COIN_COLOR
-                                      DEAD_RETRY_BTN_SOLO DEAD_RETRY_BTN_PAIR
-                                      DEAD_EDITOR_BTN HOME_BTN]]
-            ["./canvas.js" :refer [canvas ctx draw-button draw-cube]]
-            ["./state.js" :refer [game-state bank-coin]]
-            ["./physics.js" :refer [collides-with-spike collides-aabb]]
-            ["./level.js" :refer [build-level place-coins get-level-end]]
-            ["./effects.js" :refer [update-ambient-specks update-jump-rings draw-ambient-specks
-                                    draw-city-layer draw-goal-post draw-jump-rings draw-player-trail
-                                    spawn-particles spawn-coin-sparkle spawn-goal-celebration spawn-jump-ring]]
-            ["./audio.js" :refer [in-level]]
-            ["./win.js" :refer [update-win-celebration init-win-celebration draw-win-screen]]
-            ["./shop.js" :refer [equipped-color equipped-shape draw-shop]]
-            ["./editor.js" :refer [draw-editor]]
-            ["./ui.js" :refer [draw-splash draw-start-screen draw-level-select]]))
+  (:require [constants :refer [GROUND_Y PLAYER_SIZE GRAVITY JUMP_VEL
+                               GAME_SPEED COIN_RADIUS PLAYER_COLOR GROUND_COLOR
+                               SPIKE_COLOR BLOCK_COLOR CITY_STRIP_W
+                               PLAYER_TRAIL_LENGTH BG_COLORS COIN_COLOR
+                               DEAD_RETRY_BTN_SOLO DEAD_RETRY_BTN_PAIR
+                               DEAD_EDITOR_BTN HOME_BTN]]
+            [canvas :refer [ctx draw-button draw-cube]]
+            [state :refer [game-state bank-coin]]
+            [physics :refer [collides-with-spike collides-aabb]]
+            [level :refer [build-level place-coins get-level-end]]
+            [effects :refer [update-ambient-specks update-jump-rings draw-ambient-specks
+                            draw-city-layer draw-goal-post draw-jump-rings draw-player-trail
+                            spawn-particles spawn-coin-sparkle spawn-goal-celebration spawn-jump-ring]]
+            [audio :refer [in-level]]
+            [win :refer [update-win-celebration init-win-celebration draw-win-screen]]
+            [shop :refer [equipped-color equipped-shape draw-shop]]
+            [editor :refer [draw-editor]]
+            [ui :refer [draw-splash draw-start-screen draw-level-select]]))
 
 (defn trigger-player-jump []
   (set! (.-vy (.-player game-state)) JUMP_VEL)
@@ -193,7 +193,7 @@
 
           ;; Fall off screen
           (when (= (.-state game-state) "playing")
-            (if (> (.-y (.-player game-state)) (+ (.-height canvas) 100))
+            (if (> (.-y (.-player game-state)) (+ (.-height canvas/canvas) 100))
               (die)
               (let [levelEnd (get-level-end)]
                 (set! (.-score game-state)
@@ -209,11 +209,11 @@
 
 (defn draw []
   ;; Background gradient
-  (let [grad (.createLinearGradient ctx 0 0 0 (.-height canvas))]
+  (let [grad (.createLinearGradient ctx 0 0 0 (.-height canvas/canvas))]
     (.addColorStop grad 0 (aget BG_COLORS 0))
     (.addColorStop grad 1 (aget BG_COLORS 1))
     (set! (.-fillStyle ctx) grad)
-    (.fillRect ctx 0 0 (.-width canvas) (.-height canvas)))
+    (.fillRect ctx 0 0 (.-width canvas/canvas) (.-height canvas/canvas)))
 
   ;; Background grid lines (parallax)
   (set! (.-strokeStyle ctx) "rgba(255,255,255,0.04)")
@@ -221,12 +221,12 @@
   (let [gridSize 60
         parallax (if (in-level) (* (.-camera game-state) 0.3) 0)]
     (loop [x (- (mod parallax gridSize))]
-      (when (< x (.-width canvas))
-        (.beginPath ctx) (.moveTo ctx x 0) (.lineTo ctx x (.-height canvas)) (.stroke ctx)
+      (when (< x (.-width canvas/canvas))
+        (.beginPath ctx) (.moveTo ctx x 0) (.lineTo ctx x (.-height canvas/canvas)) (.stroke ctx)
         (recur (+ x gridSize))))
     (loop [y 0]
-      (when (< y (.-height canvas))
-        (.beginPath ctx) (.moveTo ctx 0 y) (.lineTo ctx (.-width canvas) y) (.stroke ctx)
+      (when (< y (.-height canvas/canvas))
+        (.beginPath ctx) (.moveTo ctx 0 y) (.lineTo ctx (.-width canvas/canvas) y) (.stroke ctx)
         (recur (+ y gridSize)))))
 
   ;; Floating ambient specks
@@ -247,15 +247,15 @@
       ;; Ground with glowing pink line & diagonal texture
       (.save ctx)
       (set! (.-fillStyle ctx) GROUND_COLOR)
-      (.fillRect ctx 0 GROUND_Y (.-width canvas) (- (.-height canvas) GROUND_Y))
+      (.fillRect ctx 0 GROUND_Y (.-width canvas/canvas) (- (.-height canvas/canvas) GROUND_Y))
       (set! (.-strokeStyle ctx) "rgba(255,255,255,0.04)")
       (set! (.-lineWidth ctx) 1)
       (let [stripeOffset (- (mod (* cx 0.5) 36))]
         (.beginPath ctx)
         (loop [x (- stripeOffset 36)]
-          (when (< x (+ (.-width canvas) 50))
+          (when (< x (+ (.-width canvas/canvas) 50))
             (.moveTo ctx x GROUND_Y)
-            (.lineTo ctx (- x 30) (.-height canvas))
+            (.lineTo ctx (- x 30) (.-height canvas/canvas))
             (recur (+ x 36))))
         (.stroke ctx))
       (set! (.-strokeStyle ctx) "#ff00d4")
@@ -264,14 +264,14 @@
       (set! (.-shadowBlur ctx) 12)
       (.beginPath ctx)
       (.moveTo ctx 0 GROUND_Y)
-      (.lineTo ctx (.-width canvas) GROUND_Y)
+      (.lineTo ctx (.-width canvas/canvas) GROUND_Y)
       (.stroke ctx)
       (.restore ctx)
 
       ;; Obstacles
       (doseq [ob (.-obstacles game-state)]
         (let [sx (- (.-x ob) cx)]
-          (when-not (or (> sx (+ (.-width canvas) 50)) (< (+ sx (.-w ob)) -50))
+          (when-not (or (> sx (+ (.-width canvas/canvas) 50)) (< (+ sx (.-w ob)) -50))
             (if (= (.-type ob) "spike")
               (do
                 (set! (.-fillStyle ctx) SPIKE_COLOR)
@@ -297,7 +297,7 @@
         (doseq [coin (.-coins game-state)]
           (when-not (.-taken coin)
             (let [sx (- (.-x coin) cx)]
-              (when-not (or (> sx (+ (.-width canvas) 50)) (< sx -50))
+              (when-not (or (> sx (+ (.-width canvas/canvas) 50)) (< sx -50))
                 (let [sy (+ (.-y coin) (* (js/Math.sin (+ (* bobTime 3) (.-phase coin))) 4))]
                   (set! (.-fillStyle ctx) COIN_COLOR)
                   (set! (.-shadowColor ctx) COIN_COLOR)
@@ -359,7 +359,7 @@
       ;; Goal screen flash
       (when (pos? (.-goalFlash game-state))
         (set! (.-fillStyle ctx) (str "rgba(255, 255, 255, " (* (.-goalFlash game-state) 0.35) ")"))
-        (.fillRect ctx 0 0 (.-width canvas) (.-height canvas)))
+        (.fillRect ctx 0 0 (.-width canvas/canvas) (.-height canvas/canvas)))
 
       ;; Progress bar
       (when (not= (.-state game-state) "win")
@@ -394,13 +394,13 @@
       ;; Death screen
       (when (= (.-state game-state) "dead")
         (set! (.-fillStyle ctx) "rgba(0,0,0,0.58)")
-        (.fillRect ctx 0 0 (.-width canvas) (.-height canvas))
+        (.fillRect ctx 0 0 (.-width canvas/canvas) (.-height canvas/canvas))
         (set! (.-fillStyle ctx) SPIKE_COLOR)
         (set! (.-font ctx) "bold 36px monospace")
         (set! (.-textAlign ctx) "center")
         (set! (.-shadowColor ctx) SPIKE_COLOR)
         (set! (.-shadowBlur ctx) 15)
-        (.fillText ctx "YOU CRASHED!" (/ (.-width canvas) 2) (- (/ (.-height canvas) 2) 45))
+        (.fillText ctx "YOU CRASHED!" (/ (.-width canvas/canvas) 2) (- (/ (.-height canvas/canvas) 2) 45))
         (set! (.-shadowBlur ctx) 0)
 
         (if (.-playingEditorLevel game-state)
@@ -418,8 +418,8 @@
         (.fillText ctx
                    (str "Tap button or press Space to retry"
                         (if (.-playingEditorLevel game-state) "  |  E = editor" ""))
-                   (/ (.-width canvas) 2)
-                   (+ (/ (.-height canvas) 2) 55))
+                   (/ (.-width canvas/canvas) 2)
+                   (+ (/ (.-height canvas/canvas) 2) 55))
         (set! (.-textAlign ctx) "left"))
 
       ;; Win screen

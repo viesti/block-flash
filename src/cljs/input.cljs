@@ -1,20 +1,20 @@
 (ns input
-  (:require ["./constants.js" :refer [PLAYER_SIZE START_PLAY_BTN START_EDITOR_BTN
-                                      START_LEVELS_BTN START_SHOP_BTN LEVEL_BACK_BTN
-                                      LEVEL_RANDOM_BTN SHOP_BACK_BTN HOME_BTN
-                                      DEAD_RETRY_BTN_SOLO DEAD_RETRY_BTN_PAIR
-                                      DEAD_EDITOR_BTN WIN_REPLAY_BTN_SOLO
-                                      WIN_REPLAY_BTN_PAIR WIN_EDITOR_BTN
-                                      level-row-btn level-copy-btn]]
-            ["./canvas.js" :refer [canvas canvas-pos in-rect]]
-            ["./state.js" :refer [game-state get-attempt-key next-attempt]]
-            ["./storage.js" :refer [load-attempts]]
-            ["./audio.js" :refer [in-level resume-music]]
-            ["./shop.js" :refer [shop-items shop-select shop-tile-rect]]
-            ["./editor.js" :refer [editor-pointer save-level start-editor-level]]
-            ["./ui.js" :refer [go-home]]
-            ["./level.js" :refer [get-level-url]]
-            ["./gameplay.js" :refer [reset trigger-player-jump]]))
+  (:require [constants :refer [PLAYER_SIZE START_PLAY_BTN START_EDITOR_BTN
+                               START_LEVELS_BTN START_SHOP_BTN LEVEL_BACK_BTN
+                               LEVEL_RANDOM_BTN SHOP_BACK_BTN HOME_BTN
+                               DEAD_RETRY_BTN_SOLO DEAD_RETRY_BTN_PAIR
+                               DEAD_EDITOR_BTN WIN_REPLAY_BTN_SOLO
+                               WIN_REPLAY_BTN_PAIR WIN_EDITOR_BTN
+                               level-row-btn level-copy-btn]]
+            [canvas :refer [canvas-pos in-rect]]
+            [state :refer [game-state get-attempt-key next-attempt]]
+            [storage :refer [load-attempts]]
+            [audio :refer [in-level resume-music]]
+            [shop :refer [shop-items shop-select shop-tile-rect]]
+            [editor :refer [editor-pointer save-level start-editor-level]]
+            [ui :refer [go-home]]
+            [level :refer [get-level-url]]
+            [gameplay :refer [reset trigger-player-jump]]))
 
 (defn on-jump []
   (let [s (.-state game-state)]
@@ -285,23 +285,23 @@
                        (when (or (= (.-code e) "Space") (= (.-code e) "ArrowUp"))
                          (set! (.-jumpPressed game-state) false))))
 
-  (.addEventListener canvas "mousedown"
+  (.addEventListener canvas/canvas "mousedown"
                      (fn [e]
                        (handle-pointer-down (.-clientX e) (.-clientY e) (= (.-button e) 2))))
-  (.addEventListener canvas "mouseup"
+  (.addEventListener canvas/canvas "mouseup"
                      (fn []
                        (set! (.-jumpPressed game-state) false)))
-  (.addEventListener canvas "contextmenu"
+  (.addEventListener canvas/canvas "contextmenu"
                      (fn [e]
                        (when (= (.-state game-state) "editor")
                          (.preventDefault e))))
-  (.addEventListener canvas "touchstart"
+  (.addEventListener canvas/canvas "touchstart"
                      (fn [e]
                        (.preventDefault e)
                        (let [t (aget (.-changedTouches e) 0)]
                          (when t
                            (handle-pointer-down (.-clientX t) (.-clientY t) false)))))
-  (.addEventListener canvas "touchend"
+  (.addEventListener canvas/canvas "touchend"
                      (fn [e]
                        (.preventDefault e)
                        (set! (.-jumpPressed game-state) false))))

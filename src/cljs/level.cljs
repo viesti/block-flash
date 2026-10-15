@@ -1,10 +1,10 @@
 (ns level
-  (:require ["./constants.js" :refer [GROUND_Y PLAYER_SIZE GRAVITY JUMP_VEL
-                                      GAME_SPEED LEVEL_LENGTH COIN_RADIUS COIN_HOVER
-                                      COIN_LAND_INSET COIN_TAKEOFF_INSET SOLVE_DT SOLVE_QUANT]]
-            ["./canvas.js" :refer [canvas]]
-            ["./physics.js" :refer [collides-aabb resolve-sim]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [GROUND_Y PLAYER_SIZE GRAVITY JUMP_VEL
+                               GAME_SPEED LEVEL_LENGTH COIN_RADIUS COIN_HOVER
+                               COIN_LAND_INSET COIN_TAKEOFF_INSET SOLVE_DT SOLVE_QUANT]]
+            [canvas]
+            [physics :refer [collides-aabb resolve-sim]]
+            [state :refer [game-state]]))
 
 (defn get-level-end
   ([] (get-level-end nil nil nil))
@@ -169,7 +169,7 @@
                                 (set! (.-onGround p) true))))
                           (if-not (resolve-sim p obstacles)
                             nil
-                            (if (> (.-y p) (.-height canvas))
+                            (if (> (.-y p) (.-height canvas/canvas))
                               nil
                               (do
                                 (doseq [c candidates]

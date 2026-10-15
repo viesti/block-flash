@@ -1,14 +1,14 @@
 (ns editor
-  (:require ["./constants.js" :refer [GROUND_Y GROUND_COLOR PLAYER_SIZE SPIKE_COLOR
-                                      BLOCK_COLOR PLAYER_COLOR CITY_STRIP_W
-                                      EDITOR_SPIKE_BTN EDITOR_BLOCK_BTN EDITOR_ERASER_BTN
-                                      EDITOR_SCROLL_L_BTN EDITOR_SCROLL_R_BTN
-                                      EDITOR_PLAY_BTN EDITOR_SAVE_BTN EDITOR_BACK_BTN]]
-            ["./canvas.js" :refer [canvas ctx draw-button in-rect]]
-            ["./storage.js" :refer [save-levels]]
-            ["./effects.js" :refer [draw-ambient-specks draw-city-layer draw-goal-post]]
-            ["./level.js" :refer [get-level-end]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [GROUND_Y GROUND_COLOR PLAYER_SIZE SPIKE_COLOR
+                               BLOCK_COLOR PLAYER_COLOR CITY_STRIP_W
+                               EDITOR_SPIKE_BTN EDITOR_BLOCK_BTN EDITOR_ERASER_BTN
+                               EDITOR_SCROLL_L_BTN EDITOR_SCROLL_R_BTN
+                               EDITOR_PLAY_BTN EDITOR_SAVE_BTN EDITOR_BACK_BTN]]
+            [canvas :refer [ctx draw-button in-rect]]
+            [storage :refer [save-levels]]
+            [effects :refer [draw-ambient-specks draw-city-layer draw-goal-post]]
+            [level :refer [get-level-end]]
+            [state :refer [game-state]]))
 
 (defn snap-to-grid [val]
   (* (js/Math.floor (/ val PLAYER_SIZE)) PLAYER_SIZE))
@@ -106,15 +106,15 @@
     ;; Ground with glowing pink line
     (.save ctx)
     (set! (.-fillStyle ctx) GROUND_COLOR)
-    (.fillRect ctx 0 GROUND_Y (.-width canvas) (- (.-height canvas) GROUND_Y))
+    (.fillRect ctx 0 GROUND_Y (.-width canvas/canvas) (- (.-height canvas/canvas) GROUND_Y))
     (set! (.-strokeStyle ctx) "rgba(255,255,255,0.04)")
     (set! (.-lineWidth ctx) 1)
     (let [editorStripeOffset (- (mod (* cx 0.5) 36))]
       (.beginPath ctx)
       (loop [x (- editorStripeOffset 36)]
-        (when (< x (+ (.-width canvas) 50))
+        (when (< x (+ (.-width canvas/canvas) 50))
           (.moveTo ctx x GROUND_Y)
-          (.lineTo ctx (- x 30) (.-height canvas))
+          (.lineTo ctx (- x 30) (.-height canvas/canvas))
           (recur (+ x 36))))
       (.stroke ctx))
     (set! (.-strokeStyle ctx) "#ff00d4")
@@ -123,7 +123,7 @@
     (set! (.-shadowBlur ctx) 12)
     (.beginPath ctx)
     (.moveTo ctx 0 GROUND_Y)
-    (.lineTo ctx (.-width canvas) GROUND_Y)
+    (.lineTo ctx (.-width canvas/canvas) GROUND_Y)
     (.stroke ctx)
     (.restore ctx)
 
@@ -131,18 +131,18 @@
     (set! (.-strokeStyle ctx) "rgba(255,255,255,0.08)")
     (set! (.-lineWidth ctx) 1)
     (loop [x (- (mod cx PLAYER_SIZE))]
-      (when (< x (.-width canvas))
+      (when (< x (.-width canvas/canvas))
         (.beginPath ctx) (.moveTo ctx x 0) (.lineTo ctx x GROUND_Y) (.stroke ctx)
         (recur (+ x PLAYER_SIZE))))
     (loop [y 0]
       (when (< y GROUND_Y)
-        (.beginPath ctx) (.moveTo ctx 0 y) (.lineTo ctx (.-width canvas) y) (.stroke ctx)
+        (.beginPath ctx) (.moveTo ctx 0 y) (.lineTo ctx (.-width canvas/canvas) y) (.stroke ctx)
         (recur (+ y PLAYER_SIZE))))
 
     ;; Obstacles
     (doseq [ob (.-editorObstacles game-state)]
       (let [sx (- (.-x ob) cx)]
-        (when-not (or (> sx (+ (.-width canvas) 50)) (< (+ sx (.-w ob)) -50))
+        (when-not (or (> sx (+ (.-width canvas/canvas) 50)) (< (+ sx (.-w ob)) -50))
           (if (= (.-type ob) "spike")
             (do
               (set! (.-fillStyle ctx) SPIKE_COLOR)
@@ -165,10 +165,10 @@
 
     ;; Toolbar
     (set! (.-fillStyle ctx) "rgba(14, 10, 26, 0.9)")
-    (.fillRect ctx 0 0 (.-width canvas) 48)
+    (.fillRect ctx 0 0 (.-width canvas/canvas) 48)
     (set! (.-strokeStyle ctx) "rgba(255, 255, 255, 0.15)")
     (set! (.-lineWidth ctx) 1)
-    (.beginPath ctx) (.moveTo ctx 0 48) (.lineTo ctx (.-width canvas) 48) (.stroke ctx)
+    (.beginPath ctx) (.moveTo ctx 0 48) (.lineTo ctx (.-width canvas/canvas) 48) (.stroke ctx)
 
     ;; Tool buttons
     (draw-button EDITOR_SPIKE_BTN "▲ SPIKE"
@@ -206,5 +206,5 @@
     (set! (.-fillStyle ctx) "rgba(255,255,255,0.45)")
     (set! (.-textAlign ctx) "center")
     (set! (.-textBaseline ctx) "alphabetic")
-    (.fillText ctx "Tap tools or 1/2/3  |  ◀ ▶ or A/D = scroll  |  Tap grid = place/erase  |  SAVE / PLAY / BACK" (/ (.-width canvas) 2) (- (.-height canvas) 12))
+    (.fillText ctx "Tap tools or 1/2/3  |  ◀ ▶ or A/D = scroll  |  Tap grid = place/erase  |  SAVE / PLAY / BACK" (/ (.-width canvas/canvas) 2) (- (.-height canvas/canvas) 12))
     (set! (.-textAlign ctx) "left")))

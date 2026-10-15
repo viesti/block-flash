@@ -1,6 +1,6 @@
 (ns state
-  (:require ["./constants.js" :refer [GROUND_Y PLAYER_SIZE]]
-            ["./storage.js" :refer [save-attempts save-coins]]))
+  (:require [constants :refer [GROUND_Y PLAYER_SIZE]]
+            [storage :refer [save-attempts save-coins]]))
 
 (def game-state
   {:state "splash"

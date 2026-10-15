@@ -1,7 +1,8 @@
 (ns canvas
-  (:require ["./constants.js" :refer [COIN_COLOR]]))
+  (:require [constants :refer [COIN_COLOR]]))
 
 (def canvas (.getElementById js/document "game"))
+(def canvas-el canvas)
 (def ctx (.getContext canvas "2d"))
 
 (set! (.-width canvas) 800)

@@ -1,12 +1,12 @@
 (ns ui
-  (:require ["./constants.js" :refer [ACCENT PLAYER_COLOR COIN_COLOR
-                                      LEVEL_BACK_BTN LEVEL_RANDOM_BTN
-                                      START_PLAY_BTN START_EDITOR_BTN
-                                      START_LEVELS_BTN START_SHOP_BTN
-                                      level-row-btn level-copy-btn]]
-            ["./canvas.js" :refer [canvas ctx draw-button draw-cube]]
-            ["./shop.js" :refer [equipped-color equipped-shape shop-has-affordable]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [ACCENT PLAYER_COLOR COIN_COLOR
+                               LEVEL_BACK_BTN LEVEL_RANDOM_BTN
+                               START_PLAY_BTN START_EDITOR_BTN
+                               START_LEVELS_BTN START_SHOP_BTN
+                               level-row-btn level-copy-btn]]
+            [canvas :refer [ctx draw-button draw-cube]]
+            [shop :refer [equipped-color equipped-shape shop-has-affordable]]
+            [state :refer [game-state]]))
 
 (defn go-home
   "Leaves a run for the main menu. The next start press builds a fresh level."
@@ -20,13 +20,13 @@
   (set! (.-font ctx) "bold 64px monospace")
   (set! (.-shadowColor ctx) ACCENT)
   (set! (.-shadowBlur ctx) 30)
-  (.fillText ctx "BLOCK FLASH" (/ (.-width canvas) 2) (- (/ (.-height canvas) 2) 10))
+  (.fillText ctx "BLOCK FLASH" (/ (.-width canvas/canvas) 2) (- (/ (.-height canvas/canvas) 2) 10))
   (set! (.-shadowBlur ctx) 0)
 
   (let [pulse (+ 0.55 (* 0.45 (js/Math.sin (/ (.now js/performance) 400))))]
     (set! (.-fillStyle ctx) (str "rgba(255,255,255," pulse ")"))
     (set! (.-font ctx) "20px monospace")
-    (.fillText ctx "press a button to play" (/ (.-width canvas) 2) (+ (/ (.-height canvas) 2) 40))))
+    (.fillText ctx "press a button to play" (/ (.-width canvas/canvas) 2) (+ (/ (.-height canvas/canvas) 2) 40))))
 
 (defn draw-start-screen []
   (set! (.-fillStyle ctx) ACCENT)
@@ -34,7 +34,7 @@
   (set! (.-textAlign ctx) "center")
   (set! (.-shadowColor ctx) ACCENT)
   (set! (.-shadowBlur ctx) 20)
-  (.fillText ctx "BLOCK FLASH" (/ (.-width canvas) 2) 85)
+  (.fillText ctx "BLOCK FLASH" (/ (.-width canvas/canvas) 2) 85)
   (set! (.-shadowBlur ctx) 0)
 
   ;; Big Play Button
@@ -49,7 +49,7 @@
   (let [t (/ (.now js/performance) 1000)
         by (* (js/Math.sin (* t 3)) 6)]
     (.save ctx)
-    (.translate ctx (/ (.-width canvas) 2) (+ 225 by))
+    (.translate ctx (/ (.-width canvas/canvas) 2) (+ 225 by))
     (.rotate ctx (* t 2))
     (draw-cube 38 (equipped-color) (equipped-shape))
     (.restore ctx))
@@ -73,14 +73,14 @@
   (set! (.-font ctx) "13px monospace")
   (set! (.-fillStyle ctx) "rgba(255,255,255,0.45)")
   (set! (.-textAlign ctx) "center")
-  (.fillText ctx "Space = Play  |  E = Editor  |  L = Levels  |  S = Shop" (/ (.-width canvas) 2) 360)
+  (.fillText ctx "Space = Play  |  E = Editor  |  L = Levels  |  S = Shop" (/ (.-width canvas/canvas) 2) 360)
 
   ;; Coins collected across every run so far
   (let [totalText (str "x " (.-coinTotal game-state) " collected")]
     (set! (.-font ctx) "16px monospace")
     (let [textWidth (.-width (.measureText ctx totalText))
-          coinX (- (/ (.-width canvas) 2) (/ textWidth 2) 14)
-          rowY (- (.-height canvas) 30)]
+          coinX (- (/ (.-width canvas/canvas) 2) (/ textWidth 2) 14)
+          rowY (- (.-height canvas/canvas) 30)]
       (set! (.-fillStyle ctx) COIN_COLOR)
       (.beginPath ctx)
       (.arc ctx coinX (- rowY 5) 9 0 (* js/Math.PI 2))
@@ -101,7 +101,7 @@
   (set! (.-textBaseline ctx) "alphabetic")
   (set! (.-shadowColor ctx) ACCENT)
   (set! (.-shadowBlur ctx) 15)
-  (.fillText ctx "SELECT LEVEL" (/ (.-width canvas) 2) 42)
+  (.fillText ctx "SELECT LEVEL" (/ (.-width canvas/canvas) 2) 42)
   (set! (.-shadowBlur ctx) 0)
 
   ;; Random level
@@ -118,7 +118,7 @@
         (set! (.-font ctx) "15px monospace")
         (set! (.-fillStyle ctx) "rgba(255,255,255,0.55)")
         (set! (.-textAlign ctx) "center")
-        (.fillText ctx "No custom levels saved yet. Create one in the Editor!" (/ (.-width canvas) 2) 170))
+        (.fillText ctx "No custom levels saved yet. Create one in the Editor!" (/ (.-width canvas/canvas) 2) 170))
       (dotimes [i maxShow]
         (let [rowBtn (level-row-btn i)
               copyBtn (level-copy-btn i)
@@ -135,5 +135,5 @@
   (set! (.-font ctx) "13px monospace")
   (set! (.-fillStyle ctx) "rgba(255,255,255,0.45)")
   (set! (.-textAlign ctx) "center")
-  (.fillText ctx "Tap level to play  |  COPY = share link  |  Number keys / Esc also work" (/ (.-width canvas) 2) 420)
+  (.fillText ctx "Tap level to play  |  COPY = share link  |  Number keys / Esc also work" (/ (.-width canvas/canvas) 2) 420)
   (set! (.-textAlign ctx) "left"))

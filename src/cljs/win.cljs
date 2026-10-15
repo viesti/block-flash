@@ -1,8 +1,8 @@
 (ns win
-  (:require ["./constants.js" :refer [GROUND_Y PLAYER_COLOR WIN_EDITOR_BTN
-                                      WIN_REPLAY_BTN_PAIR WIN_REPLAY_BTN_SOLO]]
-            ["./canvas.js" :refer [canvas ctx draw-button]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [GROUND_Y PLAYER_COLOR WIN_EDITOR_BTN
+                               WIN_REPLAY_BTN_PAIR WIN_REPLAY_BTN_SOLO]]
+            [canvas :refer [ctx draw-button]]
+            [state :refer [game-state]]))
 
 (declare spawn-firework)
 
@@ -20,8 +20,8 @@
   (let [confettiColors #js ["#00f0ff" "#ff0099" "#ffe600" "#00ff66" "#ffffff" "#7038ff"]]
     (dotimes [_ 90]
       (.push (.-winConfetti game-state)
-             {:x (* (js/Math.random) (.-width canvas))
-              :y (- (* (js/Math.random) (+ (.-height canvas) 40)) 40)
+             {:x (* (js/Math.random) (.-width canvas/canvas))
+              :y (- (* (js/Math.random) (+ (.-height canvas/canvas) 40)) 40)
               :w (+ 5 (* (js/Math.random) 4))
               :h (+ 8 (* (js/Math.random) 8))
               :vx (* (- (js/Math.random) 0.5) 45)
@@ -64,9 +64,9 @@
     (set! (.-y p) (+ (.-y p) (* (.-vy p) dt)))
     (set! (.-rot p) (+ (.-rot p) (* (.-vRot p) dt)))
     (set! (.-flip p) (+ (.-flip p) (* (.-vFlip p) dt)))
-    (when (> (.-y p) (+ (.-height canvas) 20))
+    (when (> (.-y p) (+ (.-height canvas/canvas) 20))
       (set! (.-y p) -20)
-      (set! (.-x p) (* (js/Math.random) (.-width canvas)))))
+      (set! (.-x p) (* (js/Math.random) (.-width canvas/canvas)))))
 
   (set! (.-winNextFirework game-state) (- (.-winNextFirework game-state) dt))
   (when (<= (.-winNextFirework game-state) 0)
@@ -121,11 +121,11 @@
   (.restore ctx))
 
 (defn draw-win-screen []
-  (let [cx (/ (.-width canvas) 2)]
+  (let [cx (/ (.-width canvas/canvas) 2)]
     ;; 1. Atmosphere overlay
     (.save ctx)
     (set! (.-fillStyle ctx) "rgba(10, 8, 24, 0.58)")
-    (.fillRect ctx 0 0 (.-width canvas) (.-height canvas))
+    (.fillRect ctx 0 0 (.-width canvas/canvas) (.-height canvas/canvas))
 
     ;; 2. Neon magenta ground laser beam
     (set! (.-strokeStyle ctx) "#ff00d4")
@@ -134,7 +134,7 @@
     (set! (.-shadowBlur ctx) 24)
     (.beginPath ctx)
     (.moveTo ctx 0 GROUND_Y)
-    (.lineTo ctx (.-width canvas) GROUND_Y)
+    (.lineTo ctx (.-width canvas/canvas) GROUND_Y)
     (.stroke ctx)
 
     (set! (.-strokeStyle ctx) "#ffffff")
@@ -143,7 +143,7 @@
     (set! (.-shadowBlur ctx) 6)
     (.beginPath ctx)
     (.moveTo ctx 0 GROUND_Y)
-    (.lineTo ctx (.-width canvas) GROUND_Y)
+    (.lineTo ctx (.-width canvas/canvas) GROUND_Y)
     (.stroke ctx)
     (.restore ctx)
 

@@ -1,10 +1,10 @@
 (ns shop
-  (:require ["./constants.js" :refer [PLAYER_COLOR ACCENT COIN_COLOR SHOP_COLS
-                                      SHOP_TILE_W SHOP_TILE_H SHOP_GAP SHOP_X0
-                                      SHOP_Y0 SHOP_BACK_BTN]]
-            ["./canvas.js" :refer [canvas ctx draw-button draw-cube draw-coin-icon]]
-            ["./storage.js" :refer [save-coins save-owned save-equipped]]
-            ["./state.js" :refer [game-state]]))
+  (:require [constants :refer [PLAYER_COLOR ACCENT COIN_COLOR SHOP_COLS
+                               SHOP_TILE_W SHOP_TILE_H SHOP_GAP SHOP_X0
+                               SHOP_Y0 SHOP_BACK_BTN]]
+            [canvas :refer [ctx draw-button draw-cube draw-coin-icon]]
+            [storage :refer [save-coins save-owned save-equipped]]
+            [state :refer [game-state]]))
 
 ;; Shop catalogue. The zero-price entries are owned from the start so the player
 ;; can always switch back to the plain green cube.
@@ -78,7 +78,7 @@
     (set! (.-font ctx) "bold 32px monospace")
     (set! (.-shadowColor ctx) ACCENT)
     (set! (.-shadowBlur ctx) 16)
-    (.fillText ctx "SHOP" (/ (.-width canvas) 2) 52)
+    (.fillText ctx "SHOP" (/ (.-width canvas/canvas) 2) 52)
     (set! (.-shadowBlur ctx) 0)
 
     ;; Purse
@@ -86,8 +86,8 @@
     (set! (.-textAlign ctx) "right")
     (set! (.-fillStyle ctx) "#fff")
     (let [total-str (str (.-coinTotal game-state))]
-      (.fillText ctx total-str (- (.-width canvas) 40) 46)
-      (draw-coin-icon (- (.-width canvas) 40 (.-width (.measureText ctx total-str)) 16) 40 9))
+      (.fillText ctx total-str (- (.-width canvas/canvas) 40) 46)
+      (draw-coin-icon (- (.-width canvas/canvas) 40 (.-width (.measureText ctx total-str)) 16) 40 9))
 
     (dotimes [i (.-length shop-items)]
       (let [item (aget shop-items i)
@@ -169,5 +169,5 @@
     (set! (.-textAlign ctx) "center")
     (set! (.-font ctx) "14px monospace")
     (set! (.-fillStyle ctx) "rgba(255,255,255,0.5)")
-    (.fillText ctx "Tap an item to buy or wear it  |  1-8 = select  |  Esc = back" (+ (/ (.-width canvas) 2) 50) 422)
+    (.fillText ctx "Tap an item to buy or wear it  |  1-8 = select  |  Esc = back" (+ (/ (.-width canvas/canvas) 2) 50) 422)
     (set! (.-textAlign ctx) "left")))
