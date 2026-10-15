@@ -7,14 +7,16 @@
       clip #js {:writeText (fn [txt]
                              (reset! clipboard-last-written txt)
                              (js/Promise.resolve))}]
+  (when-not (.-navigator js/globalThis)
+    (set! (.-navigator js/globalThis) #js {}))
   (try
-    (js/Object.defineProperty js/navigator "clipboard"
+    (js/Object.defineProperty (.-navigator js/globalThis) "clipboard"
       #js {:value clip :configurable true :writable true})
     (catch :default _
-      (set! (.-clipboard js/navigator) clip)))
+      (set! (.-clipboard (.-navigator js/globalThis)) clip)))
   (set! (.-window js/globalThis)
         #js {:location #js {:search "?win=1" :origin "http://localhost" :pathname "/"}
-             :navigator #js {:clipboard clip}
+             :navigator (.-navigator js/globalThis)
              :addEventListener (fn [evt-type handler]
                                  (swap! listeners update evt-type (fnil conj []) handler))
              :dispatchEvent (fn [evt]

@@ -19,7 +19,14 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$FORCE_PROD" = true ] || [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANCH" = "master" ] || [ -z "$TARGET_BRANCH" ]; then
+if [ "$FORCE_PROD" = true ]; then
+  DEST_URI="s3://tiuhti-web/tsirppu-dash/"
+  PUBLIC_URL="https://tiuhti.net/tsirppu-dash/"
+  EXCLUDE_FLAGS=(--exclude "trailer/*" --exclude "branch/*")
+elif [ -z "$TARGET_BRANCH" ]; then
+  echo "Error: Branch cannot be determined (e.g. detached HEAD). Specify BRANCH=<name> or pass --prod for production release." >&2
+  exit 1
+elif [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANCH" = "master" ]; then
   DEST_URI="s3://tiuhti-web/tsirppu-dash/"
   PUBLIC_URL="https://tiuhti.net/tsirppu-dash/"
   EXCLUDE_FLAGS=(--exclude "trailer/*" --exclude "branch/*")
