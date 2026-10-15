@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing run-tests successful?]]
             ["./env.js" :refer [clipboard-last-written]]
             ["../dist/main.js" :refer [check-url-level]]
-            ["../dist/state.js" :refer [game-state]]
+            ["../dist/state.js" :refer [game-state get-attempt-key]]
             ["../dist/gameplay.js" :refer [update draw reset]]
             ["../dist/input.js" :refer [on-jump handle-pointer-down]]
             ["../dist/shop.js" :refer [shop-select]]
@@ -234,6 +234,21 @@
       (let [coins (place-coins generated)]
         (is (js/Array.isArray coins))
         (is (pos? (.-length coins)))))))
+
+(deftest test-url-level-query-handling
+  (testing "Empty level query string (?level=) is treated as missing"
+    (set! (.-search (.-location (.-window js/globalThis))) "?level=")
+    (set! (.-playingEditorLevel game-state) false)
+    (set! (.-editorLevelName game-state) nil)
+    (is (false? (check-url-level)))
+    (is (false? (.-playingEditorLevel game-state))))
+
+  (testing "Unnamed shared level (?level=~s-200-350) defaults name to 'Shared Level' and preserves attempt key"
+    (set! (.-search (.-location (.-window js/globalThis))) "?level=~s-200-350")
+    (is (true? (check-url-level)))
+    (is (true? (.-playingEditorLevel game-state)))
+    (is (= "Shared Level" (.-editorLevelName game-state)))
+    (is (= "gdash_attempts_Shared Level" (get-attempt-key)))))
 
 ;; Run tests and exit with non-zero status on failures
 (let [summary (run-tests)]

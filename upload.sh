@@ -24,9 +24,21 @@ if [ "$FORCE_PROD" = true ] || [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANC
   PUBLIC_URL="https://tiuhti.net/tsirppu-dash/"
   EXCLUDE_FLAGS=(--exclude "trailer/*" --exclude "branch/*")
 else
-  SAFE_BRANCH=$(echo "$TARGET_BRANCH" | tr '/' '-')
-  DEST_URI="s3://tiuhti-web/tsirppu-dash/branch/${SAFE_BRANCH}/"
-  PUBLIC_URL="https://tiuhti.net/tsirppu-dash/branch/${SAFE_BRANCH}/"
+  if command -v sha256sum >/dev/null 2>&1; then
+    BRANCH_HASH=$(printf '%s' "$TARGET_BRANCH" | sha256sum | cut -c1-8)
+  elif command -v shasum >/dev/null 2>&1; then
+    BRANCH_HASH=$(printf '%s' "$TARGET_BRANCH" | shasum -a 256 | cut -c1-8)
+  else
+    BRANCH_HASH=$(printf '%s' "$TARGET_BRANCH" | git hash-object --stdin | cut -c1-8)
+  fi
+  CLEAN_SLUG=$(echo "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-40 | sed 's/-$//')
+  if [ -n "$CLEAN_SLUG" ]; then
+    BRANCH_ID="${CLEAN_SLUG}-${BRANCH_HASH}"
+  else
+    BRANCH_ID="${BRANCH_HASH}"
+  fi
+  DEST_URI="s3://tiuhti-web/tsirppu-dash/branch/${BRANCH_ID}/"
+  PUBLIC_URL="https://tiuhti.net/tsirppu-dash/branch/${BRANCH_ID}/"
   EXCLUDE_FLAGS=()
 fi
 

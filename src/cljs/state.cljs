@@ -48,7 +48,7 @@
 
 (defn get-attempt-key []
   (if (.-playingEditorLevel game-state)
-    (str "gdash_attempts_" (or (.-editorLevelName game-state) "editor"))
+    (str "gdash_attempts_" (or (not-empty (.-editorLevelName game-state)) "editor"))
     "gdash_attempts_main"))
 
 (defn next-attempt []

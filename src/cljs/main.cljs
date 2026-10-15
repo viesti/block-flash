@@ -19,13 +19,13 @@
       (when (and urlCoins (not (js/isNaN (js/parseInt urlCoins 10))))
         (set! (.-coinTotal game-state) (js/parseInt urlCoins 10))))
     (let [testWin (or (= (.get params "win") "1") (= (.get params "testwin") "1"))]
-      (if levelData
+      (if (not-empty levelData)
         (try
           (let [res (deserialize-level (js/decodeURIComponent levelData))
                 name (.-name res)
                 obstacles (.-obstacles res)]
             (set! (.-editorObstacles game-state) obstacles)
-            (set! (.-editorLevelName game-state) (or name "Shared Level"))
+            (set! (.-editorLevelName game-state) (or (not-empty name) "Shared Level"))
             (set! (.-playingEditorLevel game-state) true)
             (reset (.-editorObstacles game-state))
             (set! (.-state game-state) (if testWin "win" "playing"))
