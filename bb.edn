@@ -10,8 +10,8 @@
   test    {:doc "Compile and run the test suite written in Squint ClojureScript"
            :task (do
                    (shell node "./node_modules/.bin/squint" "compile")
-                   (shell node "./node_modules/.bin/squint" "compile" "--paths" "test/cljs" "--output-dir" "test" "--extension" ".js")
-                   (shell node "test/test_suite.js"))}
+                   (shell node "./node_modules/.bin/squint" "compile" "--paths" "test/cljs" "--output-dir" "test" "--extension" ".js" "--source-map")
+                   (shell node "--enable-source-maps" "test/test_suite.js"))}
   importmap {:doc "Generate importmap in index.html using JSPM from package.json"
              :task (do
                      (when-not (.exists (java.io.File. "dist/main.js"))

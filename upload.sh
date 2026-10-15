@@ -60,6 +60,7 @@ rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 cp -p index.html game.js *.mp3 "$STAGE_DIR/"
 cp -rp dist "$STAGE_DIR/"
+cp -rp src "$STAGE_DIR/"
 
 # Sync to S3, pruning obsolete files while protecting excluded paths
 aws --profile tiuhti s3 sync "$STAGE_DIR/" "$DEST_URI" \

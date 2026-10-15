@@ -5,4 +5,5 @@ node_modules/
 target/
 dist/
 test/*.js
+test/*.js.map
 .clj-kondo/
