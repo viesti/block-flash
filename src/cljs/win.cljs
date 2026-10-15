@@ -241,11 +241,11 @@
     (if (.-playingEditorLevel game-state)
       (do
         (draw-button WIN_EDITOR_BTN "🛠 EDITOR"
-                    {:stroke "#ffaa00" :fill "rgba(255,170,0,0.16)" :textColor "#ffaa00"})
+                     {:stroke "#ffaa00" :fill "rgba(255,170,0,0.16)" :textColor "#ffaa00"})
         (draw-button WIN_REPLAY_BTN_PAIR "↻ PLAY AGAIN"
-                    {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
+                     {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
       (draw-button WIN_REPLAY_BTN_SOLO "↻ PLAY AGAIN"
-                  {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
+                   {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
 
     (set! (.-fillStyle ctx) "rgba(255, 255, 255, 0.45)")
     (set! (.-font ctx) "12px monospace")

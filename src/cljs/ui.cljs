@@ -39,11 +39,11 @@
 
   ;; Big Play Button
   (draw-button START_PLAY_BTN "▶ PLAY"
-              {:stroke PLAYER_COLOR
-               :fill "rgba(0, 255, 136, 0.18)"
-               :pulse true
-               :font "bold 18px monospace"
-               :textColor PLAYER_COLOR})
+               {:stroke PLAYER_COLOR
+                :fill "rgba(0, 255, 136, 0.18)"
+                :pulse true
+                :font "bold 18px monospace"
+                :textColor PLAYER_COLOR})
 
   ;; Animated player icon, wearing whatever is equipped
   (let [t (/ (.now js/performance) 1000)
@@ -56,18 +56,18 @@
 
   ;; Navigation button bar
   (draw-button START_EDITOR_BTN "🛠 EDITOR"
-              {:stroke "#ffaa00"
-               :fill "rgba(255, 170, 0, 0.14)"
-               :textColor "#ffaa00"})
+               {:stroke "#ffaa00"
+                :fill "rgba(255, 170, 0, 0.14)"
+                :textColor "#ffaa00"})
   (draw-button START_LEVELS_BTN "📋 LEVELS"
-              {:stroke "#00d4ff"
-               :fill "rgba(0, 212, 255, 0.14)"
-               :textColor "#00d4ff"})
+               {:stroke "#00d4ff"
+                :fill "rgba(0, 212, 255, 0.14)"
+                :textColor "#00d4ff"})
   (let [canBuy (shop-has-affordable)]
     (draw-button START_SHOP_BTN "🛒 SHOP"
-                (if canBuy
-                  {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}
-                  {:stroke "#ff44aa" :fill "rgba(255,68,170,0.14)" :textColor "#ff44aa"})))
+                 (if canBuy
+                   {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}
+                   {:stroke "#ff44aa" :fill "rgba(255,68,170,0.14)" :textColor "#ff44aa"})))
 
   ;; Helper text
   (set! (.-font ctx) "13px monospace")
@@ -106,10 +106,10 @@
 
   ;; Random level
   (draw-button LEVEL_RANDOM_BTN "▶ 0: Random Level (Standard)"
-              {:stroke PLAYER_COLOR
-               :fill "rgba(0,255,136,0.12)"
-               :font "bold 15px monospace"
-               :textColor PLAYER_COLOR})
+               {:stroke PLAYER_COLOR
+                :fill "rgba(0,255,136,0.12)"
+                :font "bold 15px monospace"
+                :textColor PLAYER_COLOR})
 
   (let [savedCount (.-length (.-savedLevels game-state))
         maxShow (js/Math.min savedCount 6)]
@@ -127,10 +127,10 @@
               label (str (inc i) ": " (.-name level) " (" (.-length (.-obstacles level)) " objects)")]
           (draw-button rowBtn label {:font "14px monospace"})
           (draw-button copyBtn (if isCopied "COPIED!" "COPY")
-                      {:stroke (if isCopied PLAYER_COLOR "rgba(0,212,255,0.5)")
-                       :fill (if isCopied "rgba(0,255,136,0.18)" "rgba(0,212,255,0.1)")
-                       :font "bold 13px monospace"
-                       :textColor (if isCopied PLAYER_COLOR "#00d4ff")})))))
+                       {:stroke (if isCopied PLAYER_COLOR "rgba(0,212,255,0.5)")
+                        :fill (if isCopied "rgba(0,255,136,0.18)" "rgba(0,212,255,0.1)")
+                        :font "bold 13px monospace"
+                        :textColor (if isCopied PLAYER_COLOR "#00d4ff")})))))
 
   (set! (.-font ctx) "13px monospace")
   (set! (.-fillStyle ctx) "rgba(255,255,255,0.45)")

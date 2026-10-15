@@ -203,28 +203,28 @@
   [obstacles]
   (let [placed #js []
         over-spike (fn [x]
-                    (.some obstacles
-                           (fn [ob]
-                             (and (= (.-type ob) "spike")
-                                  (> (+ x COIN_RADIUS) (- (.-x ob) PLAYER_SIZE))
-                                  (< (- x COIN_RADIUS) (+ (.-x ob) (.-w ob) PLAYER_SIZE))))))
+                     (.some obstacles
+                            (fn [ob]
+                              (and (= (.-type ob) "spike")
+                                   (> (+ x COIN_RADIUS) (- (.-x ob) PLAYER_SIZE))
+                                   (< (- x COIN_RADIUS) (+ (.-x ob) (.-w ob) PLAYER_SIZE))))))
         stand-clear (fn [x surface]
-                     (not (.some obstacles
-                                 (fn [ob]
-                                   (collides-aabb (- x (/ PLAYER_SIZE 2))
-                                                (- surface PLAYER_SIZE)
-                                                PLAYER_SIZE
-                                                PLAYER_SIZE
-                                                (.-x ob)
-                                                (obstacle-top ob)
-                                                (.-w ob)
-                                                (- (obstacle-bottom ob) (obstacle-top ob)))))))
+                      (not (.some obstacles
+                                  (fn [ob]
+                                    (collides-aabb (- x (/ PLAYER_SIZE 2))
+                                                   (- surface PLAYER_SIZE)
+                                                   PLAYER_SIZE
+                                                   PLAYER_SIZE
+                                                   (.-x ob)
+                                                   (obstacle-top ob)
+                                                   (.-w ob)
+                                                   (- (obstacle-bottom ob) (obstacle-top ob)))))))
         add-coin (fn [x surface]
-                  (when (and (not (over-spike x)) (stand-clear x surface))
-                    (.push placed {:x x
-                                   :y (- surface COIN_RADIUS COIN_HOVER)
-                                   :taken false
-                                   :phase (* (js/Math.random) js/Math.PI 2)})))]
+                   (when (and (not (over-spike x)) (stand-clear x surface))
+                     (.push placed {:x x
+                                    :y (- surface COIN_RADIUS COIN_HOVER)
+                                    :taken false
+                                    :phase (* (js/Math.random) js/Math.PI 2)})))]
     (doseq [ob obstacles]
       (when (= (.-type ob) "block")
         (let [cells (js/Math.max 1 (js/Math.round (/ (.-w ob) PLAYER_SIZE)))]

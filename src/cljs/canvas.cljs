@@ -29,30 +29,30 @@
   ([r label]
    (draw-button r label nil))
   ([r label opts]
-  (let [opts (or opts #js {})]
-    (.save ctx)
-    (set! (.-fillStyle ctx) (or (.-fill opts) "rgba(0,0,0,0.35)"))
-    (.beginPath ctx)
-    (if (.-roundRect ctx)
-      (.roundRect ctx (.-x r) (.-y r) (.-w r) (.-h r) (or (.-radius opts) 8))
-      (.rect ctx (.-x r) (.-y r) (.-w r) (.-h r)))
-    (.fill ctx)
+   (let [opts (or opts #js {})]
+     (.save ctx)
+     (set! (.-fillStyle ctx) (or (.-fill opts) "rgba(0,0,0,0.35)"))
+     (.beginPath ctx)
+     (if (.-roundRect ctx)
+       (.roundRect ctx (.-x r) (.-y r) (.-w r) (.-h r) (or (.-radius opts) 8))
+       (.rect ctx (.-x r) (.-y r) (.-w r) (.-h r)))
+     (.fill ctx)
 
-    (set! (.-globalAlpha ctx)
-          (if (.-pulse opts)
-            (+ 0.55 (* 0.45 (js/Math.sin (/ (.now js/performance) 220))))
-            1))
-    (set! (.-strokeStyle ctx) (or (.-stroke opts) "rgba(255,255,255,0.3)"))
-    (set! (.-lineWidth ctx) (or (.-lineWidth opts) 2))
-    (.stroke ctx)
+     (set! (.-globalAlpha ctx)
+           (if (.-pulse opts)
+             (+ 0.55 (* 0.45 (js/Math.sin (/ (.now js/performance) 220))))
+             1))
+     (set! (.-strokeStyle ctx) (or (.-stroke opts) "rgba(255,255,255,0.3)"))
+     (set! (.-lineWidth ctx) (or (.-lineWidth opts) 2))
+     (.stroke ctx)
 
-    (set! (.-globalAlpha ctx) 1)
-    (set! (.-fillStyle ctx) (or (.-textColor opts) "#fff"))
-    (set! (.-font ctx) (or (.-font opts) "bold 15px monospace"))
-    (set! (.-textAlign ctx) "center")
-    (set! (.-textBaseline ctx) "middle")
-    (.fillText ctx label (+ (.-x r) (/ (.-w r) 2)) (+ (.-y r) (/ (.-h r) 2)))
-    (.restore ctx))))
+     (set! (.-globalAlpha ctx) 1)
+     (set! (.-fillStyle ctx) (or (.-textColor opts) "#fff"))
+     (set! (.-font ctx) (or (.-font opts) "bold 15px monospace"))
+     (set! (.-textAlign ctx) "center")
+     (set! (.-textBaseline ctx) "middle")
+     (.fillText ctx label (+ (.-x r) (/ (.-w r) 2)) (+ (.-y r) (/ (.-h r) 2)))
+     (.restore ctx))))
 
 (defn draw-cube
   "Draws a cube centred on the current transform origin. The caller owns any

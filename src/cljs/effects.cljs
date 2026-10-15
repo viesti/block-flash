@@ -12,7 +12,7 @@
             t1 (js/Math.imul (bit-xor new-s (unsigned-bit-shift-right new-s 15))
                              (bit-or 1 new-s))
             t2 (bit-xor (+ t1 (js/Math.imul (bit-xor t1 (unsigned-bit-shift-right t1 7))
-                                           (bit-or 61 t1)))
+                                            (bit-or 61 t1)))
                         t1)]
         (/ (unsigned-bit-shift-right (bit-xor t2 (unsigned-bit-shift-right t2 14)) 0)
            4294967296)))))

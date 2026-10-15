@@ -172,17 +172,17 @@
 
     ;; Tool buttons
     (draw-button EDITOR_SPIKE_BTN "▲ SPIKE"
-                (if (= (.-editorTool game-state) "spike")
-                  {:stroke SPIKE_COLOR :fill "rgba(255,34,85,0.28)" :textColor "#fff"}
-                  {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
+                 (if (= (.-editorTool game-state) "spike")
+                   {:stroke SPIKE_COLOR :fill "rgba(255,34,85,0.28)" :textColor "#fff"}
+                   {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
     (draw-button EDITOR_BLOCK_BTN "■ BLOCK"
-                (if (= (.-editorTool game-state) "block")
-                  {:stroke "#6688ff" :fill "rgba(68,100,255,0.28)" :textColor "#fff"}
-                  {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
+                 (if (= (.-editorTool game-state) "block")
+                   {:stroke "#6688ff" :fill "rgba(68,100,255,0.28)" :textColor "#fff"}
+                   {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
     (draw-button EDITOR_ERASER_BTN "✖ ERASE"
-                (if (= (.-editorTool game-state) "eraser")
-                  {:stroke "#ff00ff" :fill "rgba(255,0,255,0.28)" :textColor "#fff"}
-                  {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
+                 (if (= (.-editorTool game-state) "eraser")
+                   {:stroke "#ff00ff" :fill "rgba(255,0,255,0.28)" :textColor "#fff"}
+                   {:stroke "rgba(255,255,255,0.2)" :fill "rgba(0,0,0,0.4)" :textColor "rgba(255,255,255,0.6)"}))
 
     ;; Camera scroll buttons
     (draw-button EDITOR_SCROLL_L_BTN "◀" {:font "bold 16px monospace"})
@@ -198,7 +198,7 @@
     ;; Action buttons
     (draw-button EDITOR_PLAY_BTN "▶ PLAY" {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.15)" :textColor PLAYER_COLOR})
     (draw-button EDITOR_SAVE_BTN (if (pos? (.-editorSavedFeedback game-state)) "SAVED!" "💾 SAVE")
-                {:stroke "#ffd700" :fill "rgba(255,215,0,0.15)" :textColor "#ffd700"})
+                 {:stroke "#ffd700" :fill "rgba(255,215,0,0.15)" :textColor "#ffd700"})
     (draw-button EDITOR_BACK_BTN "◀ BACK")
 
     ;; Bottom helper text

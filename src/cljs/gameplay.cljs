@@ -11,8 +11,8 @@
             [physics :refer [collides-with-spike collides-aabb]]
             [level :refer [build-level place-coins get-level-end]]
             [effects :refer [update-ambient-specks update-jump-rings draw-ambient-specks
-                            draw-city-layer draw-goal-post draw-jump-rings draw-player-trail
-                            spawn-particles spawn-coin-sparkle spawn-goal-celebration spawn-jump-ring]]
+                             draw-city-layer draw-goal-post draw-jump-rings draw-player-trail
+                             spawn-particles spawn-coin-sparkle spawn-goal-celebration spawn-jump-ring]]
             [audio :refer [in-level]]
             [win :refer [update-win-celebration init-win-celebration draw-win-screen]]
             [shop :refer [equipped-color equipped-shape draw-shop]]
@@ -23,11 +23,11 @@
   (set! (.-vy (.-player game-state)) JUMP_VEL)
   (set! (.-onGround (.-player game-state)) false)
   (spawn-jump-ring (+ (.-x (.-player game-state)) (/ PLAYER_SIZE 2))
-                 (+ (.-y (.-player game-state)) (/ PLAYER_SIZE 2))))
+                   (+ (.-y (.-player game-state)) (/ PLAYER_SIZE 2))))
 
 (defn die []
   (spawn-particles (+ (.-x (.-player game-state)) (/ PLAYER_SIZE 2))
-                  (+ (.-y (.-player game-state)) (/ PLAYER_SIZE 2)))
+                   (+ (.-y (.-player game-state)) (/ PLAYER_SIZE 2)))
   (set! (.-state game-state) "dead")
   (set! (.-deathTime game-state) (.now js/performance))
   (set! (.-playerTrail game-state) #js []))
@@ -35,26 +35,26 @@
 (defn reset
   ([] (reset nil))
   ([customObstacles]
-  (set! (.-player game-state)
-        {:x 100 :y (- GROUND_Y PLAYER_SIZE) :vy 0 :onGround true :rotation 0})
-  (set! (.-camera game-state) 0)
-  (set! (.-obstacles game-state)
-        (if customObstacles
-          (.map customObstacles (fn [o] (js/Object.assign #js {} o)))
-          (build-level)))
-  (set! (.-coins game-state)
-        (if customObstacles
-          #js []
-          (place-coins (.-obstacles game-state))))
-  (set! (.-coinsCollected game-state) 0)
-  (set! (.-particles game-state) #js [])
-  (set! (.-playerTrail game-state) #js [])
-  (set! (.-jumpRings game-state) #js [])
-  (set! (.-score game-state) 0)
-  (set! (.-goalCrossed game-state) false)
-  (set! (.-winDelay game-state) 0)
-  (set! (.-goalFlash game-state) 0)
-  (set! (.-goalRipples game-state) #js [])))
+   (set! (.-player game-state)
+         {:x 100 :y (- GROUND_Y PLAYER_SIZE) :vy 0 :onGround true :rotation 0})
+   (set! (.-camera game-state) 0)
+   (set! (.-obstacles game-state)
+         (if customObstacles
+           (.map customObstacles (fn [o] (js/Object.assign #js {} o)))
+           (build-level)))
+   (set! (.-coins game-state)
+         (if customObstacles
+           #js []
+           (place-coins (.-obstacles game-state))))
+   (set! (.-coinsCollected game-state) 0)
+   (set! (.-particles game-state) #js [])
+   (set! (.-playerTrail game-state) #js [])
+   (set! (.-jumpRings game-state) #js [])
+   (set! (.-score game-state) 0)
+   (set! (.-goalCrossed game-state) false)
+   (set! (.-winDelay game-state) 0)
+   (set! (.-goalFlash game-state) 0)
+   (set! (.-goalRipples game-state) #js [])))
 
 (defn update [dt]
   (when (pos? (.-editorSavedFeedback game-state))
@@ -135,8 +135,8 @@
           (doseq [ob (.-obstacles game-state)]
             (when (and (= (.-state game-state) "playing") (= (.-type ob) "block"))
               (when (collides-aabb (.-x (.-player game-state)) (.-y (.-player game-state))
-                                  PLAYER_SIZE PLAYER_SIZE
-                                  (.-x ob) (.-y ob) (.-w ob) (.-h ob))
+                                   PLAYER_SIZE PLAYER_SIZE
+                                   (.-x ob) (.-y ob) (.-w ob) (.-h ob))
                 (let [overlapBottom (- (+ (.-y (.-player game-state)) PLAYER_SIZE) (.-y ob))
                       overlapTop (- (+ (.-y ob) (.-h ob)) (.-y (.-player game-state)))
                       overlapLeft (- (+ (.-x (.-player game-state)) PLAYER_SIZE) (.-x ob))
@@ -177,8 +177,8 @@
             (doseq [ob (.-obstacles game-state)]
               (when (and (= (.-state game-state) "playing") (= (.-type ob) "spike"))
                 (when (collides-with-spike (.-x (.-player game-state)) (.-y (.-player game-state))
-                                         PLAYER_SIZE
-                                         (.-x ob) (.-y ob) (.-w ob) (.-h ob))
+                                           PLAYER_SIZE
+                                           (.-x ob) (.-y ob) (.-w ob) (.-h ob))
                   (die)))))
 
           ;; Coin pickup
@@ -186,9 +186,9 @@
             (doseq [coin (.-coins game-state)]
               (when-not (.-taken coin)
                 (when (collides-aabb (.-x (.-player game-state)) (.-y (.-player game-state))
-                                    PLAYER_SIZE PLAYER_SIZE
-                                    (- (.-x coin) COIN_RADIUS) (- (.-y coin) COIN_RADIUS)
-                                    (* COIN_RADIUS 2) (* COIN_RADIUS 2))
+                                     PLAYER_SIZE PLAYER_SIZE
+                                     (- (.-x coin) COIN_RADIUS) (- (.-y coin) COIN_RADIUS)
+                                     (* COIN_RADIUS 2) (* COIN_RADIUS 2))
                   (set! (.-taken coin) true)
                   (set! (.-coinsCollected game-state) (inc (.-coinsCollected game-state)))
                   (bank-coin)
@@ -409,11 +409,11 @@
         (if (.-playingEditorLevel game-state)
           (do
             (draw-button DEAD_RETRY_BTN_PAIR "↻ RETRY"
-                        {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR})
+                         {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR})
             (draw-button DEAD_EDITOR_BTN "🛠 EDITOR"
-                        {:stroke "#ffaa00" :fill "rgba(255,170,0,0.16)" :textColor "#ffaa00"}))
+                         {:stroke "#ffaa00" :fill "rgba(255,170,0,0.16)" :textColor "#ffaa00"}))
           (draw-button DEAD_RETRY_BTN_SOLO "↻ RETRY"
-                      {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
+                       {:stroke PLAYER_COLOR :fill "rgba(0,255,136,0.18)" :pulse true :textColor PLAYER_COLOR}))
 
         (set! (.-fillStyle ctx) "rgba(255,255,255,0.55)")
         (set! (.-font ctx) "13px monospace")
