@@ -182,19 +182,19 @@
                                   nil
                                   (if (and (.-onGround p) (or jump (>= (- (.-x p) from-x) SOLVE_QUANT)))
                                     {:x (.-x p) :top (+ (.-y p) PLAYER_SIZE)}
-                                    (recur (inc i))))))))))))]
-    (let [seen (js/Set. #js [(str "100:" GROUND_Y)])
-          pending #js [{:x 100 :top GROUND_Y}]]
-      (while (pos? (.-length pending))
-        (let [from (.pop pending)]
-          (doseq [jump [false true]]
-            (let [next (advance (.-x from) (.-top from) jump)]
-              (when next
-                (let [key (str (js/Math.round (/ (.-x next) SOLVE_QUANT)) ":" (js/Math.round (.-top next)))]
-                  (when-not (.has seen key)
-                    (.add seen key)
-                    (.push pending next))))))))
-      swept)))
+                                    (recur (inc i))))))))))))
+        seen (js/Set. #js [(str "100:" GROUND_Y)])
+        pending #js [{:x 100 :top GROUND_Y}]]
+    (while (pos? (.-length pending))
+      (let [from (.pop pending)]
+        (doseq [jump [false true]]
+          (let [next (advance (.-x from) (.-top from) jump)]
+            (when next
+              (let [key (str (js/Math.round (/ (.-x next) SOLVE_QUANT)) ":" (js/Math.round (.-top next)))]
+                (when-not (.has seen key)
+                  (.add seen key)
+                  (.push pending next))))))))
+    swept))
 
 (defn place-coins
   "Coins are proposed over footing the player can stand on, kept off the ends of

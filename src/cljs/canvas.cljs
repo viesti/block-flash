@@ -2,7 +2,6 @@
   (:require [constants :refer [COIN_COLOR]]))
 
 (def canvas (.getElementById js/document "game"))
-(def canvas-el canvas)
 (def ctx (.getContext canvas "2d"))
 
 (set! (.-width canvas) 800)
@@ -27,7 +26,9 @@
 
 (defn draw-button
   "Draws a rounded menu button with optional glow, pulse, and custom styling."
-  [r label opts]
+  ([r label]
+   (draw-button r label nil))
+  ([r label opts]
   (let [opts (or opts #js {})]
     (.save ctx)
     (set! (.-fillStyle ctx) (or (.-fill opts) "rgba(0,0,0,0.35)"))
@@ -51,7 +52,7 @@
     (set! (.-textAlign ctx) "center")
     (set! (.-textBaseline ctx) "middle")
     (.fillText ctx label (+ (.-x r) (/ (.-w r) 2)) (+ (.-y r) (/ (.-h r) 2)))
-    (.restore ctx)))
+    (.restore ctx))))
 
 (defn draw-cube
   "Draws a cube centred on the current transform origin. The caller owns any

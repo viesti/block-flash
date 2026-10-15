@@ -1,7 +1,7 @@
 (ns effects
   (:require [constants :refer [GROUND_Y PLAYER_SIZE COIN_COLOR ACCENT CITY_STRIP_W]]
             [canvas :refer [ctx draw-cube]]
-            [shop :refer [equipped-color equipped-shape]]
+            [shop :refer [equipped-color]]
             [state :refer [game-state]]))
 
 (defn rng [seed]

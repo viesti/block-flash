@@ -1,4 +1,5 @@
 (ns gameplay
+  (:refer-clojure :exclude [update])
   (:require [constants :refer [GROUND_Y PLAYER_SIZE GRAVITY JUMP_VEL
                                GAME_SPEED COIN_RADIUS PLAYER_COLOR GROUND_COLOR
                                SPIKE_COLOR BLOCK_COLOR CITY_STRIP_W
@@ -31,7 +32,9 @@
   (set! (.-deathTime game-state) (.now js/performance))
   (set! (.-playerTrail game-state) #js []))
 
-(defn reset [customObstacles]
+(defn reset
+  ([] (reset nil))
+  ([customObstacles]
   (set! (.-player game-state)
         {:x 100 :y (- GROUND_Y PLAYER_SIZE) :vy 0 :onGround true :rotation 0})
   (set! (.-camera game-state) 0)
@@ -51,7 +54,7 @@
   (set! (.-goalCrossed game-state) false)
   (set! (.-winDelay game-state) 0)
   (set! (.-goalFlash game-state) 0)
-  (set! (.-goalRipples game-state) #js []))
+  (set! (.-goalRipples game-state) #js [])))
 
 (defn update [dt]
   (when (pos? (.-editorSavedFeedback game-state))
