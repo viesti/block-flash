@@ -1,8 +1,10 @@
 (ns storage)
 
 (defn load-coin-total []
-  (let [stored (js/parseInt (.getItem js/localStorage "gdash_coins") 10)]
-    (if (js/isNaN stored) 0 stored)))
+  (try
+    (let [stored (js/parseInt (.getItem js/localStorage "gdash_coins") 10)]
+      (if (js/isNaN stored) 0 stored))
+    (catch :default _ 0)))
 
 (defn save-coins [coin-total]
   (try
@@ -10,8 +12,10 @@
     (catch :default _ nil)))
 
 (defn load-attempts [attempt-key]
-  (let [stored (js/parseInt (.getItem js/localStorage attempt-key) 10)]
-    (if (or (js/isNaN stored) (< stored 1)) 1 stored)))
+  (try
+    (let [stored (js/parseInt (.getItem js/localStorage attempt-key) 10)]
+      (if (or (js/isNaN stored) (< stored 1)) 1 stored))
+    (catch :default _ 1)))
 
 (defn save-attempts [attempt-key attempt-count]
   (try
