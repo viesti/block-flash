@@ -1,0 +1,10 @@
+{
+  "name": "block-flash",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "jspm": "3.3.5",
+    "squint-cljs": "0.15.212"
+  }
+}

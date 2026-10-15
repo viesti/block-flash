@@ -1,4 +1,31 @@
 {:tasks
- {web {:doc "Start local HTTP server (default port 8000)"
-       :task (let [port (or (first *command-line-args*) "8000")]
-               (shell "python3" "-m" "http.server" port))}}}
+ {:init (def node (or (System/getenv "NODE")
+                      (if (.exists (java.io.File. "/opt/homebrew/bin/node"))
+                        "/opt/homebrew/bin/node"
+                        "node")))
+  compile {:doc "Compile ClojureScript files via Squint to ES modules"
+           :task (shell node "./node_modules/.bin/squint" "compile")}
+  watch   {:doc "Watch and auto-recompile ClojureScript files via Squint"
+           :task (shell node "./node_modules/.bin/squint" "watch")}
+  test    {:doc "Compile and run the test suite written in Squint ClojureScript"
+           :task (do
+                   (shell node "./node_modules/.bin/squint" "compile")
+                   (shell node "./node_modules/.bin/squint" "compile" "--paths" "test/cljs" "--output-dir" "test" "--extension" ".js" "--source-map")
+                   (shell node "--enable-source-maps" "test/test_suite.js"))}
+  importmap {:doc "Generate importmap in index.html using JSPM from package.json"
+             :task (do
+                     (when-not (.exists (java.io.File. "dist/main.js"))
+                       (shell node "./node_modules/.bin/squint" "compile"))
+                     (let [extra-env (cond-> {}
+                                       (.exists (java.io.File. "/etc/ssl/cert.pem"))
+                                       (assoc "NODE_EXTRA_CA_CERTS" "/etc/ssl/cert.pem"))]
+                       (apply shell (concat (when (seq extra-env) [{:extra-env extra-env}])
+                                            [node "./node_modules/.bin/jspm" "link" "index.html" "-o" "index.html"]))))}
+  web     {:doc "Start local HTTP server (default port 8000)"
+           :task (let [port (or (first *command-line-args*) "8000")]
+                   (when-not (.exists (java.io.File. "dist/main.js"))
+                     (shell node "./node_modules/.bin/squint" "compile"))
+                   (shell "python3" "-m" "http.server" port))}
+  release {:doc "Compile, test, and upload game assets to S3 via upload.sh"
+           :depends [test]
+           :task (apply shell "./upload.sh" *command-line-args*)}}}

@@ -1,0 +1,9 @@
+node_modules/
+.cpcache/
+.calva/
+.lsp/
+target/
+dist/
+test/*.js
+test/*.js.map
+.clj-kondo/

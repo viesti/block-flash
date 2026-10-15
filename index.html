@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1">
 <title>Block Flash</title>
+<script async src="https://ga.jspm.io/npm:es-module-shims@2.8.4/dist/es-module-shims.js" crossorigin="anonymous"></script>
+<script type="importmap">
+{
+  "imports": {
+    "squint-cljs/core.js": "https://ga.jspm.io/npm:squint-cljs@0.15.212/core.js"
+  }
+}
+</script>
 <style>
 * { margin: 0; padding: 0; }
 body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
@@ -12,6 +20,6 @@ canvas { display: block; width: 100vw; height: 100vh; object-fit: contain; touch
 </head>
 <body>
 <canvas id="game"></canvas>
-<script type="module" src="src/main.js"></script>
+<script type="module" src="dist/main.js"></script>
 </body>
 </html>

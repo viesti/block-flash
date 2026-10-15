@@ -1,1 +1,1 @@
-import "./src/main.js";
+import "./dist/main.js";

@@ -1,0 +1,4 @@
+{:paths ["src/cljs"]
+ :output-dir "dist"
+ :extension ".js"
+ :source-map true}
